@@ -2,7 +2,7 @@
 // BBT 軟式棒球聯盟 - 全新站點 API 服務模組 (api.js)
 // ============================================================================
 
-const API_BASE_URL = "https://script.google.com/macros/s/AKfycbzLsW1ccI4HVGy7kv1jLYhJeIhQ0q3Fp6dZaouIESTOJkkEW5pvj3ZKX7dXzej-6PNraQ/exec";
+const API_BASE_URL = "https://script.google.com/macros/s/AKfycbzuiDAxjUJxslGOa3r76qVL2MSF7757-3QiGKLrM8EXaXq6dYY-Gb9o1Esl9XfnKuUVTQ/exec";
 
 async function callApi(action, data = {}) {
   try {
