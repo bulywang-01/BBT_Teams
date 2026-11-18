@@ -18,8 +18,8 @@
             bbt: {
               navy: '#0b132b',
               sidebar: '#1c2541',
-              accent: '#10b981', // 翡翠綠
-              gold: '#f59e0b',   // 冠軍金
+              accent: '#10b981',
+              gold: '#f59e0b',
               card: '#ffffff'
             }
           }
@@ -451,7 +451,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 3: 出賽點名 / 請假回報 (改為下拉選單選球員) ================= -->
+  <!-- ================= MODAL 3: 出賽點名 / 請假回報 (改為遠端賽事下拉選單) ================= -->
   <div id="attendanceModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -459,9 +459,18 @@
         <button onclick="closeAttendanceModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <div class="space-y-3 text-xs">
-        <div><label class="font-bold text-slate-700 block mb-1">場次代號 (game_id)</label><input type="text" id="attGameId" value="G042" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold"></div>
+        <!-- 🌟 改為遠端賽事下拉選單 -->
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <label class="font-bold text-slate-700">選擇比賽場次 (遠端同步)</label>
+            <button onclick="loadRemoteScheduleOptions()" type="button" class="text-[10px] text-emerald-600 font-bold hover:underline">🔄 重新載入賽事</button>
+          </div>
+          <select id="attGameSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+            <option value="">-- 請先開啟以載入遠端賽事 --</option>
+          </select>
+        </div>
         
-        <!-- 改為下拉選單：直接讀取該球隊名單 -->
+        <!-- 下拉選單選球員 -->
         <div>
           <label class="font-bold text-slate-700 block mb-1">選擇球員 (免輸代號)</label>
           <select id="attUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
@@ -512,7 +521,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 5: FA 自由球員宣告申請 (改為條件點選 + 自行輸入) ================= -->
+  <!-- ================= MODAL 5: FA 自由球員宣告申請 ================= -->
   <div id="faApplyModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -522,7 +531,6 @@
       <div class="space-y-3 text-xs">
         <p class="text-slate-500">依據聯盟 FA 規範，請選擇您的球員身分並套用或自訂符合條件：</p>
         
-        <!-- 改為下拉選單選球員 -->
         <div>
           <label class="font-bold text-slate-700 block mb-1">選擇球員 (免輸代號)</label>
           <select id="faUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
@@ -530,7 +538,6 @@
           </select>
         </div>
 
-        <!-- FA 條件快速點選 -->
         <div>
           <label class="font-bold text-slate-700 block mb-1">快速套用聯盟 FA 規定條件</label>
           <select id="faPresetSelect" onchange="document.getElementById('faNote').value=this.value;" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-slate-50 text-emerald-700">
@@ -561,6 +568,9 @@
     let currentSeason = '2026-S18';
     let currentRosterFilter = 'all';
     let activePlayerCardCache = null;
+
+    // 🌟 設定遠端共用賽事表 ID (可隨時切換正式與測試)
+    const REMOTE_SCHEDULE_SHEET_ID = '1kgJti-vuALVDPhVWHdb0G5_Ows4Usp61Y00L9JMrrmw'; // 正式 ID
 
     document.addEventListener('DOMContentLoaded', async () => {
       await initSystem();
@@ -657,7 +667,6 @@
       updateTeamPlayerSelects();
     }
 
-    // 動態更新 Modal 中的球員下拉選單 (依據目前選擇的球隊名單)
     function updateTeamPlayerSelects() {
       const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
       const optionsHtml = teamRoster.length > 0 
@@ -666,6 +675,24 @@
 
       document.getElementById('attUserSelect').innerHTML = optionsHtml;
       document.getElementById('faUserSelect').innerHTML = optionsHtml;
+    }
+
+    // 🌟 動態從遠端載入賽事清單至下拉選單
+    async function loadRemoteScheduleOptions() {
+      const selectEl = document.getElementById('attGameSelect');
+      selectEl.innerHTML = `<option value="">正在從遠端賽事表載入...</option>`;
+
+      const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Schedule');
+
+      if (res && res.result === 'ok' && res.schedule && res.schedule.length > 0) {
+        selectEl.innerHTML = res.schedule.map(g => {
+          const gId = g.game_id || g.ID || 'G000';
+          const gDesc = `${gId} : ${g.date || ''} (${g.home_team || ''} vs ${g.away_team || ''})`;
+          return `<option value="${gId}">${gDesc}</option>`;
+        }).join('');
+      } else {
+        selectEl.innerHTML = `<option value="G042">G042 : 11/22 暗殺者 vs 實踐夢想家 (預設)</option>`;
+      }
     }
 
     function renderRosterTable() {
@@ -847,7 +874,12 @@
     function openTeamProfileModal() { document.getElementById('teamProfileModal').classList.remove('hidden'); document.getElementById('teamProfileModal').classList.add('flex'); }
     function closeTeamProfileModal() { document.getElementById('teamProfileModal').classList.add('hidden'); document.getElementById('teamProfileModal').classList.remove('flex'); }
 
-    function openAttendanceModal() { document.getElementById('attendanceModal').classList.remove('hidden'); document.getElementById('attendanceModal').classList.add('flex'); }
+    async function openAttendanceModal() { 
+      document.getElementById('attendanceModal').classList.remove('hidden'); 
+      document.getElementById('attendanceModal').classList.add('flex'); 
+      // 🌟 開啟時自動載入遠端賽事選項
+      await loadRemoteScheduleOptions();
+    }
     function closeAttendanceModal() { document.getElementById('attendanceModal').classList.add('hidden'); document.getElementById('attendanceModal').classList.remove('flex'); }
 
     function openAnnouncementModal() { document.getElementById('announcementModal').classList.remove('hidden'); document.getElementById('announcementModal').classList.add('flex'); }
@@ -872,11 +904,12 @@
     }
 
     async function submitAttendance() {
-      const game_id = document.getElementById('attGameId').value;
+      const game_id = document.getElementById('attGameSelect').value; // 讀取下拉選單的值
       const user_id = document.getElementById('attUserSelect').value;
       const status = document.getElementById('attStatus').value;
       const reason = document.getElementById('attReason').value;
 
+      if (!game_id) { alert('請選擇比賽場次'); return; }
       if (!user_id) { alert('請選擇球員'); return; }
 
       const res = await BBTApi.saveAttendance({ game_id, team_id: currentSelectedTeamId, user_id, status, reason });
