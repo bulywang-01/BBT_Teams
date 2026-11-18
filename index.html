@@ -678,20 +678,61 @@
     }
 
     // 🌟 動態從遠端載入賽事清單至下拉選單
+// 🌟 動態從遠端載入賽事清單至下拉選單（自動過濾組別與本週之後的賽事）
     async function loadRemoteScheduleOptions() {
       const selectEl = document.getElementById('attGameSelect');
-      selectEl.innerHTML = `<option value="">正在從遠端賽事表載入...</option>`;
+      selectEl.innerHTML = `<option value="">正在從遠端賽事表載入賽程...</option>`;
 
       const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Schedule');
 
       if (res && res.result === 'ok' && res.schedule && res.schedule.length > 0) {
-        selectEl.innerHTML = res.schedule.map(g => {
-          const gId = g.game_id || g.ID || 'G000';
-          const gDesc = `${gId} : ${g.date || ''} (${g.home_team || ''} vs ${g.away_team || ''})`;
-          return `<option value="${gId}">${gDesc}</option>`;
-        }).join('');
+        // 取得目前選中的球隊名稱
+        const currentTeam = globalData.teams.find(t => String(t.team_id) === String(currentSelectedTeamId));
+        const teamName = currentTeam ? currentTeam.team_name : '';
+
+        // 取得今天的日期字串 (YYYY-MM-DD) 用來過濾「本週/今天之後」的賽事
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // 過濾條件：
+        // 1. 組別符合當前切換的組別 (例如大聯盟 / 小聯盟，對應欄位 category 或 league_type)
+        // 2. 參賽隊伍包含此球隊 (home_team 或 away_team 包含球隊名稱)
+        // 3. 日期 >= 今天 (date)
+        const filteredGames = res.schedule.filter(g => {
+          const gameCategory = String(g.category || g.league_type || '').trim();
+          // 組別比對 (支援中文大聯盟/小聯盟，或英文 major/minor)
+          const matchDiv = gameCategory.includes(currentDivision) || 
+                           (currentDivision === '大聯盟' && gameCategory.toLowerCase() === 'major') ||
+                           (currentDivision === '小聯盟' && gameCategory.toLowerCase() === 'minor');
+          
+          // 隊伍比對 (主隊或客隊包含該球隊名稱)
+          const matchTeam = !teamName || 
+                            String(g.home_team).includes(teamName) || 
+                            String(g.away_team).includes(teamName);
+
+          // 日期篩選 (不早於今天)
+          const gameDate = String(g.date || '').split('T')[0];
+          const matchDate = !gameDate || gameDate >= todayStr;
+
+          return matchDiv && matchTeam && matchDate;
+        });
+
+        // 如果過濾後有符合的賽事就顯示，若剛好沒有則顯示該組別所有未來賽事供選擇
+        const targetList = filteredGames.length > 0 ? filteredGames : res.schedule.filter(g => String(g.date || '').split('T')[0] >= todayStr);
+
+        if (targetList.length > 0) {
+          selectEl.innerHTML = targetList.map(g => {
+            const gId = g.game_id || g.ID || 'G000';
+            const gCode = g.game_code ? `[${g.game_code}]` : '';
+            const gDate = g.date ? String(g.date).split('T')[0] : '';
+            const gTime = g.time ? ` ${g.time}` : '';
+            const matchup = `${g.home_team || '主隊'} vs ${g.away_team || '客隊'}`;
+            return `<option value="${gId}">${gId} ${gCode} : ${gDate}${gTime} (${matchup})</option>`;
+          }).join('');
+        } else {
+          selectEl.innerHTML = `<option value="">目前尚無符合條件的未來賽事</option>`;
+        }
       } else {
-        selectEl.innerHTML = `<option value="G042">G042 : 11/22 暗殺者 vs 實踐夢想家 (預設)</option>`;
+        selectEl.innerHTML = `<option value="G042">G042 : 11/22 客隊 vs 主隊 (假資料)</option>`;
       }
     }
 
