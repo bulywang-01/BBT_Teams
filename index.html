@@ -677,17 +677,30 @@
       document.getElementById('faUserSelect').innerHTML = optionsHtml;
     }
 
-    // 🌟 動態從遠端載入賽事清單至下拉選單 (優化日期與時間格式化)
+    // 🌟 動態從遠端載入賽事清單 (嚴格過濾本週起與該球隊賽事，拿掉前方數字)
     async function loadRemoteScheduleOptions() {
       const selectEl = document.getElementById('attGameSelect');
       selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
 
       const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Games');
 
-      if (res && res.result === 'ok' && res.schedule && res.schedule.length > 0) {
+      if (res && res.result === 'ok`' || (res && res.result === 'ok' && res.schedule && res.schedule.length > 0)) {
         const currentTeam = globalData.teams.find(t => String(t.team_id) === String(currentSelectedTeamId));
         const teamName = currentTeam ? String(currentTeam.team_name).trim() : '';
 
+        // 計算「本週週一」到「本週週日」的日期範圍
+        const now = new Date();
+        const dayOfWeek = now.getDay(); // 0 (週日) 到 6 (週六)
+        const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        
+        const monday = new Date(now);
+        monday.setDate(now.getDate() + distanceToMonday);
+        monday.setHours(0, 0, 0, 0); // 本週週一開始
+
+        // 過濾條件：
+        // 1. 組別符合
+        // 2. 只有該隊的賽事 (主隊或客隊包含該球隊名稱)
+        // 3. 日期條件：本週週一（或之後）的賽事才顯示
         const filteredGames = res.schedule.filter(g => {
           const gameCategory = String(g.category || g.league_type || '').trim();
           const homeTeam = String(g.home_team || '').trim();
@@ -700,57 +713,67 @@
           
           const matchTeam = !teamName || homeTeam.includes(teamName) || awayTeam.includes(teamName);
 
-          return matchDiv && matchTeam;
-        });
-
-        const fallbackList = res.schedule.filter(g => {
-          const gameCategory = String(g.category || g.league_type || '').trim();
-          return !currentDivision || gameCategory.includes(currentDivision) || gameCategory === '';
-        });
-
-        const targetList = filteredGames.length > 0 ? filteredGames : (fallbackList.length > 0 ? fallbackList : res.schedule);
-
-        selectEl.innerHTML = targetList.map(g => {
-          const gId = g.game_id || 'G000';
-          const gCode = g.game_code ? `[${g.game_code}]` : '';
-          
-          // 🛠️ 格式化日期：只取 YYYY-MM-DD 部分
-          let dateStr = '';
+          // 比對日期是否在本週週一之後
+          let matchDate = true;
           if (g.date) {
-            const d = new Date(g.date);
-            if (!isNaN(d.getTime())) {
-              dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
-            } else {
-              dateStr = String(g.date).split('T')[0].replace(/-/g, '/');
+            const gDate = new Date(g.date);
+            if (!isNaN(gDate.getTime())) {
+              // 忽略時分秒直接比對日期
+              gDate.setHours(0, 0, 0, 0);
+              matchDate = gDate >= monday;
             }
           }
 
-          // 🛠️ 格式化時間：濾掉 1899/12/30 基準日，只抓取真正的 HH:mm
-          let timeStr = '';
-          if (g.time) {
-            const tStr = String(g.time);
-            if (tStr.includes('1899') || tStr.includes('1900')) {
-              const dt = new Date(g.time);
-              if (!isNaN(dt.getTime())) {
-                timeStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+          return matchDiv && matchTeam && matchDate;
+        });
+
+        const targetList = filteredGames;
+
+        if (targetList.length > 0) {
+          selectEl.innerHTML = targetList.map(g => {
+            const gId = g.game_id || 'G000';
+            const gCode = g.game_code ? `[${g.game_code}]` : `[${gId}]`;
+            
+            // 格式化日期：YYYY/MM/DD
+            let dateStr = '';
+            if (g.date) {
+              const d = new Date(g.date);
+              if (!isNaN(d.getTime())) {
+                dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+              } else {
+                dateStr = String(g.date).split('T')[0].replace(/-/g, '/');
               }
-            } else if (tStr.includes(' ')) {
-              // 如果包含日期時間混合字串，抓出後面時間
-              const parts = tStr.split(' ');
-              timeStr = parts[parts.length - 1].substring(0, 5);
-            } else {
-              timeStr = tStr.substring(0, 5); // 取前五碼如 "08:30"
             }
-          }
 
-          const dateTimeDisplay = timeStr ? `${dateStr} ${timeStr}` : dateStr;
-          const matchup = `${g.home_team || '主隊'} vs ${g.away_team || '客隊'}`;
-          
-          return `<option value="${gId}">${gId} ${gCode} : ${dateTimeDisplay} (${matchup})</option>`;
-        }).join('');
+            // 格式化時間：HH:mm
+            let timeStr = '';
+            if (g.time) {
+              const tStr = String(g.time);
+              if (tStr.includes('1899') || tStr.includes('1900')) {
+                const dt = new Date(g.time);
+                if (!isNaN(dt.getTime())) {
+                  timeStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+                }
+              } else if (tStr.includes(' ')) {
+                const parts = tStr.split(' ');
+                timeStr = parts[parts.length - 1].substring(0, 5);
+              } else {
+                timeStr = tStr.substring(0, 5);
+              }
+            }
+
+            const dateTimeDisplay = timeStr ? `${dateStr} ${timeStr}` : dateStr;
+            const matchup = `${g.home_team || '主隊'} vs ${g.away_team || '客隊'}`;
+            
+            // 💡 拿掉前方數字，直接顯示 [代碼] 日期 時間 (對戰組合)
+            return `<option value="${gId}">${gCode} : ${dateTimeDisplay} (${matchup})</option>`;
+          }).join('');
+        } else {
+          selectEl.innerHTML = `<option value="">本週及之後目前無該球隊的賽事</option>`;
+        }
 
       } else {
-        selectEl.innerHTML = `<option value="">⚠️ 無法讀取遠端賽事: ${res.message || '請檢查遠端工作表名稱是否為 Games'}</option>`;
+        selectEl.innerHTML = `<option value="">⚠️ 無法讀取遠端賽事資料</option>`;
       }
     }
 
