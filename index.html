@@ -508,7 +508,7 @@
         
         <div>
           <label class="font-bold text-slate-700 block mb-1">選擇球員 (免輸代號)</label>
-          <select id="attUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
+          <select id="attUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed">
             <option value="">-- 請先選擇球隊或載入球員 --</option>
           </select>
         </div>
@@ -762,22 +762,25 @@
       loadRemoteScheduleOptions();
     }
 
-    function updateTeamPlayerSelects(fixedUserId = '') {
-      const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
+    function updateTeamPlayerSelects() {
       const editRecordId = document.getElementById('attEditRecordId').value;
       const attUserSelect = document.getElementById('attUserSelect');
+      const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
 
-      // 🌟 如果是修改模式，直接強制放入該球員並 disabled
-      if (editRecordId && fixedUserId) {
-        const pObj = teamRoster.find(p => String(p.user_id) === String(fixedUserId));
-        const pName = pObj ? `#${pObj.number || '—'} ${pObj.player_name} (${pObj.position || '球員'})` : fixedUserId;
-        
-        attUserSelect.innerHTML = `<option value="${fixedUserId}" selected>${pName}</option>`;
-        attUserSelect.disabled = true; // 鎖定不能選
-        return;
+      // 🌟 如果是在修改模式中，從全域 attendance 找到該筆紀錄對應的球員並強制鎖定顯示
+      if (editRecordId) {
+        const attObj = globalData.attendance.find(a => String(a.att_id) === String(editRecordId));
+        if (attObj) {
+          const pObj = teamRoster.find(p => String(p.user_id) === String(attObj.user_id));
+          const pName = pObj ? `#${pObj.number || '—'} ${pObj.player_name} (${pObj.position || '球員'})` : attObj.user_id;
+          
+          attUserSelect.innerHTML = `<option value="${attObj.user_id}" selected>${pName}</option>`;
+          attUserSelect.disabled = true; // 鎖定不能更改球員
+          return;
+        }
       }
 
-      // 🌟 新增模式：正常過濾掉已回報過的球員
+      // 🌟 一般新增模式：開放選取，並過濾掉已回報過的球員
       attUserSelect.disabled = false;
       const selectedGameId = document.getElementById('attGameSelect') ? document.getElementById('attGameSelect').value : '';
       let availablePlayers = teamRoster;
@@ -808,7 +811,9 @@
       const filterSelect = document.getElementById('filterAttendanceGameSelect');
       const batchGameSelect = document.getElementById('batchGameSelect');
 
-      if (selectEl) selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
+      if (selectEl && !document.getElementById('attEditRecordId').value) {
+        selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
+      }
 
       const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Games');
 
@@ -914,9 +919,7 @@
           }).join('');
         }
 
-        if (!document.getElementById('attEditRecordId').value) {
-          updateTeamPlayerSelects();
-        }
+        updateTeamPlayerSelects();
         renderAttendanceTable();
 
       } else {
@@ -1002,6 +1005,7 @@
     async function submitAttendance() {
       const att_id = document.getElementById('attEditRecordId').value;
       const game_id = document.getElementById('attGameSelect').value;
+      // 🌟 修改模式下選單被 disabled 時，直接從 DOM 或原本的紀錄抓取 user_id
       const user_id = document.getElementById('attUserSelect').value;
       const status = document.getElementById('attStatus').value;
       const reason = document.getElementById('attReason').value;
@@ -1026,14 +1030,20 @@
       const att = globalData.attendance.find(a => String(a.att_id) === String(attId));
       if (!att) return;
 
+      // 1. 先設定好編輯的 ID
       document.getElementById('attEditRecordId').value = att.att_id;
       document.getElementById('attendanceModalTitle').innerText = "修改球員出勤與請假狀態";
       
-      await openAttendanceModal();
+      // 2. 開啟彈窗
+      document.getElementById('attendanceModal').classList.remove('hidden');
+      document.getElementById('attendanceModal').classList.add('flex');
+
+      // 3. 載入賽程並直接帶入該筆紀錄的值
+      await loadRemoteScheduleOptions();
       document.getElementById('attGameSelect').value = att.game_id;
       
-      // 🌟 呼叫專門處理修改的帶入並鎖定球員函式
-      updateTeamPlayerSelects(att.user_id);
+      // 4. 再次呼叫更新選單（此時帶有 attEditRecordId，會自動填入球員並上鎖）
+      updateTeamPlayerSelects();
 
       document.getElementById('attStatus').value = att.status;
       document.getElementById('attReason').value = att.reason || '';
