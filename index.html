@@ -705,7 +705,6 @@
         const cardStyle = isSelected ? 'bg-slate-900 text-white border-2 border-emerald-500 shadow-md' : 'bg-white hover:bg-slate-50 border border-slate-200';
         const rosterLen = globalData.roster.filter(r => String(r.team_id) === String(t.team_id)).length;
         
-        // 🌟 側邊欄球隊圖示：讀取 /logo/隊伍ID.png，若無則顯示隊名第一或第二個字
         const teamNameStr = String(t.team_name || '').trim();
         const fallbackChar = teamNameStr.length > 1 ? teamNameStr.substring(1, 2) : (teamNameStr.substring(0, 1) || 'B');
         const logoPath = `logo/${t.team_id}.png`;
@@ -746,7 +745,6 @@
       document.getElementById('coachText').innerText = team.coach || '—';
       document.getElementById('contactText').innerText = `${team.contact_name || '—'} (${team.contact_phone || ''})`;
 
-      // 🌟 右側 Banner 球隊圖示：讀取 /logo/隊伍ID.png，無圖則退回顯示隊名字元
       const teamNameStr = String(team.team_name || '').trim();
       const fallbackChar = teamNameStr.length > 1 ? teamNameStr.substring(1, 2) : (teamNameStr.substring(0, 1) || 'B');
       const logoPath = `logo/${team.team_id}.png`;
@@ -771,18 +769,17 @@
       const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
       const editRecordId = document.getElementById('attEditRecordId').value;
 
-      const alreadyReportedUserIds = new Set();
-      if (selectedGameId) {
+      let availablePlayers = teamRoster;
+
+      // 🌟 修正：只有在「新增模式」才過濾掉已回報的球員；「修改模式」時要保留該球員供顯示與選擇
+      if (!editRecordId && selectedGameId) {
+        const alreadyReportedUserIds = new Set();
         globalData.attendance
           .filter(att => String(att.game_id) === String(selectedGameId) && String(att.team_id) === String(currentSelectedTeamId))
-          .forEach(att => {
-            if (!editRecordId || String(att.att_id) !== String(editRecordId)) {
-              alreadyReportedUserIds.add(String(att.user_id));
-            }
-          });
-      }
+          .forEach(att => alreadyReportedUserIds.add(String(att.user_id)));
 
-      const availablePlayers = teamRoster.filter(p => !alreadyReportedUserIds.has(String(p.user_id)));
+        availablePlayers = teamRoster.filter(p => !alreadyReportedUserIds.has(String(p.user_id)));
+      }
 
       const optionsHtml = availablePlayers.length > 0 
         ? availablePlayers.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
@@ -1027,7 +1024,8 @@
         document.getElementById('attGameSelect').value = att.game_id;
         updateTeamPlayerSelects();
         document.getElementById('attUserSelect').value = att.user_id;
-        document.getElementById('attUserSelect').disabled = true;
+        // 🌟 修改時設定為唯讀或鎖定選中球員，避免混淆
+        document.getElementById('attUserSelect').disabled = false; 
         document.getElementById('attStatus').value = att.status;
         document.getElementById('attReason').value = att.reason || '';
       });
