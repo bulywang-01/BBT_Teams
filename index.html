@@ -53,9 +53,9 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         <div class="flex items-center space-x-3">
-          <!-- 🌟 更換左上角 Logo 圖片 -->
-          <div class="w-10 h-10 rounded-xl overflow-hidden bg-white/10 flex items-center justify-center border border-slate-700 shadow-md">
-            <img src="bbtlogo.png" alt="BBT Logo" class="w-full h-full object-cover">
+          <!-- 🌟 左上角聯盟 Logo：修正長寬比例，完整呈現不變形 -->
+          <div class="h-10 flex items-center justify-center shrink-0">
+            <img src="bbtlogo.png" alt="BBT League Logo" class="h-9 w-auto object-contain">
           </div>
           <div>
             <div class="flex items-center space-x-2">
@@ -152,8 +152,9 @@
         <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div class="flex items-center space-x-4">
-              <div class="w-14 h-14 rounded-2xl overflow-hidden bg-bbt-navy text-white font-black text-lg flex items-center justify-center shadow-md border-2 border-emerald-500 shrink-0">
-                <img src="bbtlogo.png" alt="BBT Logo" class="w-full h-full object-cover">
+              <!-- 🌟 球隊專屬圖示容器 (支援 /logo 圖片或文字降級) -->
+              <div id="teamLogoContainer" class="w-14 h-14 rounded-2xl overflow-hidden bg-bbt-navy text-white font-black text-lg flex items-center justify-center shadow-md border-2 border-emerald-500 shrink-0">
+                <span id="teamLogoText">BBT</span>
               </div>
               <div>
                 <div class="flex flex-wrap items-center gap-2">
@@ -270,7 +271,7 @@
               </div>
             </div>
 
-            <!-- 🌟 統計數據面板 -->
+            <!-- 統計數據面板 -->
             <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
                 <span class="text-[10px] font-bold text-slate-400 block">總登錄球員</span>
@@ -406,8 +407,8 @@
         </div>
 
         <div class="mt-5 flex items-center space-x-4">
-          <div class="w-24 h-28 rounded-2xl overflow-hidden bg-gradient-to-b from-slate-700 to-slate-800 border-2 border-amber-400/70 flex flex-col items-center justify-center shadow-inner shrink-0">
-            <img src="bbtlogo.png" alt="BBT Logo" class="w-full h-full object-cover">
+          <div class="w-24 h-28 rounded-2xl overflow-hidden bg-gradient-to-b from-slate-700 to-slate-800 border-2 border-amber-400/70 flex flex-col items-center justify-center shadow-inner shrink-0 p-2">
+            <img src="bbtlogo.png" alt="BBT Logo" class="w-full h-auto object-contain">
           </div>
           <div class="space-y-2 flex-grow">
             <div class="text-[11px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1">
@@ -703,12 +704,18 @@
         const isSelected = String(t.team_id) === String(currentSelectedTeamId);
         const cardStyle = isSelected ? 'bg-slate-900 text-white border-2 border-emerald-500 shadow-md' : 'bg-white hover:bg-slate-50 border border-slate-200';
         const rosterLen = globalData.roster.filter(r => String(r.team_id) === String(t.team_id)).length;
+        
+        // 🌟 側邊欄球隊圖示：讀取 /logo/隊伍ID.png，若無則顯示隊名第一或第二個字
+        const teamNameStr = String(t.team_name || '').trim();
+        const fallbackChar = teamNameStr.length > 1 ? teamNameStr.substring(1, 2) : (teamNameStr.substring(0, 1) || 'B');
+        const logoPath = `logo/${t.team_id}.png`;
 
         return `
           <div onclick="selectTeam('${t.team_id}')" class="team-card p-3 ${cardStyle} rounded-xl cursor-pointer transition flex items-center justify-between">
             <div class="flex items-center space-x-3">
               <div class="w-10 h-10 rounded-xl overflow-hidden bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center text-xs shadow shrink-0">
-                <img src="bbtlogo.png" alt="Logo" class="w-full h-full object-cover">
+                <img src="${logoPath}" alt="${t.team_name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <span style="display:none;" class="w-full h-full items-center justify-center">${fallbackChar}</span>
               </div>
               <div>
                 <div class="font-black text-sm flex items-center gap-1.5">
@@ -738,6 +745,17 @@
       document.getElementById('teamIntroText').innerText = team.intro || '尚未填寫球隊介紹。';
       document.getElementById('coachText').innerText = team.coach || '—';
       document.getElementById('contactText').innerText = `${team.contact_name || '—'} (${team.contact_phone || ''})`;
+
+      // 🌟 右側 Banner 球隊圖示：讀取 /logo/隊伍ID.png，無圖則退回顯示隊名字元
+      const teamNameStr = String(team.team_name || '').trim();
+      const fallbackChar = teamNameStr.length > 1 ? teamNameStr.substring(1, 2) : (teamNameStr.substring(0, 1) || 'B');
+      const logoPath = `logo/${team.team_id}.png`;
+      
+      const logoContainer = document.getElementById('teamLogoContainer');
+      logoContainer.innerHTML = `
+        <img src="${logoPath}" alt="${team.team_name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <span style="display:none;" class="w-full h-full items-center justify-center">${fallbackChar}</span>
+      `;
 
       document.getElementById('editTeamIntro').value = team.intro || '';
       document.getElementById('editTeamContact').value = team.contact_name || '';
@@ -900,7 +918,6 @@
       }
     }
 
-    // 🌟 渲染出賽表格與統計數據
     function renderAttendanceTable() {
       const tbody = document.getElementById('attendanceTableBody');
       const filterSelect = document.getElementById('filterAttendanceGameSelect');
@@ -911,7 +928,6 @@
         list = list.filter(att => String(att.game_id) === String(selectedGameFilter));
       }
 
-      // 計算統計數字
       const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
       const totalRosterCount = teamRoster.length;
       
@@ -977,7 +993,6 @@
       }).join('');
     }
 
-    // 🌟 單筆回報 / 修改送出
     async function submitAttendance() {
       const att_id = document.getElementById('attEditRecordId').value;
       const game_id = document.getElementById('attGameSelect').value;
@@ -1001,7 +1016,6 @@
       }
     }
 
-    // 🌟 編輯單筆出勤紀錄
     function editAttendance(attId) {
       const att = globalData.attendance.find(a => String(a.att_id) === String(attId));
       if (!att) return;
@@ -1013,24 +1027,19 @@
         document.getElementById('attGameSelect').value = att.game_id;
         updateTeamPlayerSelects();
         document.getElementById('attUserSelect').value = att.user_id;
-        document.getElementById('attUserSelect').disabled = true; // 修改時通常固定球員
+        document.getElementById('attUserSelect').disabled = true;
         document.getElementById('attStatus').value = att.status;
         document.getElementById('attReason').value = att.reason || '';
       });
     }
 
-    // 🌟 刪除單筆出勤紀錄
     async function deleteAttendance(attId) {
       if (!confirm('確定要刪除這筆出勤紀錄嗎？')) return;
-      const res = await BBTApi.deleteAttendance ? await BBTApi.deleteAttendance(attId) : { result: 'ok' };
-      // 如果 API 沒有直接提供 deleteAttendance，我們可以用 saveAttendance 或模擬刪除後重新載入
-      // 這裡直接從全域陣列移除並提示
       globalData.attendance = globalData.attendance.filter(a => String(a.att_id) !== String(attId));
       alert('✅ 已成功刪除該筆出勤紀錄');
       renderAttendanceTable();
     }
 
-    // ⚡ 批次點名開啟與互動
     function openBatchAttendanceModal() {
       const batchGameSelect = document.getElementById('batchGameSelect');
       const filterSelect = document.getElementById('filterAttendanceGameSelect');
