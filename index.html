@@ -677,37 +677,32 @@
       document.getElementById('faUserSelect').innerHTML = optionsHtml;
     }
 
-    // 🌟 動態從遠端載入賽事清單至下拉選單 (對應 Games 分頁)
+    // 🌟 動態從遠端載入賽事清單至下拉選單 (優化日期與時間格式化)
     async function loadRemoteScheduleOptions() {
       const selectEl = document.getElementById('attGameSelect');
       selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
 
-      // 💡 這裡將分頁名稱從 'Schedule' 改為 'Games'
       const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Games');
 
       if (res && res.result === 'ok' && res.schedule && res.schedule.length > 0) {
         const currentTeam = globalData.teams.find(t => String(t.team_id) === String(currentSelectedTeamId));
         const teamName = currentTeam ? String(currentTeam.team_name).trim() : '';
 
-        // 依據你的 Games 欄位進行篩選 (category, home_team, away_team, date 等)
         const filteredGames = res.schedule.filter(g => {
           const gameCategory = String(g.category || g.league_type || '').trim();
           const homeTeam = String(g.home_team || '').trim();
           const awayTeam = String(g.away_team || '').trim();
 
-          // 1. 組別比對 (例如大聯盟 / 小聯盟)
           const matchDiv = !currentDivision || 
                            gameCategory.includes(currentDivision) || 
                            (currentDivision === '大聯盟' && gameCategory.toLowerCase().includes('major')) ||
                            (currentDivision === '小聯盟' && gameCategory.toLowerCase().includes('minor'));
           
-          // 2. 隊伍比對 (主隊或客隊包含該球隊名稱)
           const matchTeam = !teamName || homeTeam.includes(teamName) || awayTeam.includes(teamName);
 
           return matchDiv && matchTeam;
         });
 
-        // 若無完全符合則退而求其次顯示該組別所有賽事
         const fallbackList = res.schedule.filter(g => {
           const gameCategory = String(g.category || g.league_type || '').trim();
           return !currentDivision || gameCategory.includes(currentDivision) || gameCategory === '';
@@ -718,10 +713,40 @@
         selectEl.innerHTML = targetList.map(g => {
           const gId = g.game_id || 'G000';
           const gCode = g.game_code ? `[${g.game_code}]` : '';
-          const gDate = g.date ? String(g.date).split('T')[0] : '';
-          const gTime = g.time ? ` ${g.time}` : '';
+          
+          // 🛠️ 格式化日期：只取 YYYY-MM-DD 部分
+          let dateStr = '';
+          if (g.date) {
+            const d = new Date(g.date);
+            if (!isNaN(d.getTime())) {
+              dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+            } else {
+              dateStr = String(g.date).split('T')[0].replace(/-/g, '/');
+            }
+          }
+
+          // 🛠️ 格式化時間：濾掉 1899/12/30 基準日，只抓取真正的 HH:mm
+          let timeStr = '';
+          if (g.time) {
+            const tStr = String(g.time);
+            if (tStr.includes('1899') || tStr.includes('1900')) {
+              const dt = new Date(g.time);
+              if (!isNaN(dt.getTime())) {
+                timeStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+              }
+            } else if (tStr.includes(' ')) {
+              // 如果包含日期時間混合字串，抓出後面時間
+              const parts = tStr.split(' ');
+              timeStr = parts[parts.length - 1].substring(0, 5);
+            } else {
+              timeStr = tStr.substring(0, 5); // 取前五碼如 "08:30"
+            }
+          }
+
+          const dateTimeDisplay = timeStr ? `${dateStr} ${timeStr}` : dateStr;
           const matchup = `${g.home_team || '主隊'} vs ${g.away_team || '客隊'}`;
-          return `<option value="${gId}">${gId} ${gCode} : ${gDate}${gTime} (${matchup})</option>`;
+          
+          return `<option value="${gId}">${gId} ${gCode} : ${dateTimeDisplay} (${matchup})</option>`;
         }).join('');
 
       } else {
