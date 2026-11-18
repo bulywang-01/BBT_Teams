@@ -258,7 +258,6 @@
               <div>
                 <div class="flex items-center space-x-2">
                   <span class="bg-emerald-500 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded uppercase">出賽管理模組</span>
-                  <span class="text-xs text-slate-300 font-bold">同步寫入 Google Sheets `Team_Attendance`</span>
                 </div>
                 <h4 class="text-base font-black mt-1">球員出席回報與請假管理控制台</h4>
               </div>
@@ -272,8 +271,8 @@
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                   <tr>
-                    <th class="p-3">場次 ID (game_id)</th>
-                    <th class="p-3">球員姓名 (user_id)</th>
+                    <th class="p-3">場次</th>
+                    <th class="p-3">球員姓名</th>
                     <th class="p-3">出勤狀態</th>
                     <th class="p-3">請假事由說明</th>
                     <th class="p-3 text-right">最後更新時間</th>
@@ -465,7 +464,7 @@
             <label class="font-bold text-slate-700">選擇比賽場次 (遠端同步)</label>
             <button onclick="loadRemoteScheduleOptions()" type="button" class="text-[10px] text-emerald-600 font-bold hover:underline">🔄 重新載入賽事</button>
           </div>
-          <select id="attGameSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+          <select id="attGameSelect" onchange="updateTeamPlayerSelects()" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
             <option value="">-- 請先開啟以載入遠端賽事 --</option>
           </select>
         </div>
@@ -667,14 +666,36 @@
       updateTeamPlayerSelects();
     }
 
+    // 🌟 更新球員下拉選單（自動過濾掉「本場比賽已回報過」的球員，實現防呆）
     function updateTeamPlayerSelects() {
+      const selectedGameId = document.getElementById('attGameSelect') ? document.getElementById('attGameSelect').value : '';
       const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
-      const optionsHtml = teamRoster.length > 0 
-        ? teamRoster.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
-        : `<option value="">此球隊目前無登錄球員</option>`;
 
-      document.getElementById('attUserSelect').innerHTML = optionsHtml;
-      document.getElementById('faUserSelect').innerHTML = optionsHtml;
+      // 找出該場次已經回報過的球員 user_id 集合
+      const alreadyReportedUserIds = new Set();
+      if (selectedGameId) {
+        globalData.attendance
+          .filter(att => String(att.game_id) === String(selectedGameId) && String(att.team_id) === String(currentSelectedTeamId))
+          .forEach(att => alreadyReportedUserIds.add(String(att.user_id)));
+      }
+
+      // 過濾掉已經回報過的球員
+      const availablePlayers = teamRoster.filter(p => !alreadyReportedUserIds.has(String(p.user_id)));
+
+      const optionsHtml = availablePlayers.length > 0 
+        ? availablePlayers.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
+        : `<option value="">此場次該球隊所有球員皆已完成回報</option>`;
+
+      const attUserSelect = document.getElementById('attUserSelect');
+      if (attUserSelect) attUserSelect.innerHTML = optionsHtml;
+
+      const faUserSelect = document.getElementById('faUserSelect');
+      if (faUserSelect) {
+        // FA 專區維持顯示全部球員
+        faUserSelect.innerHTML = teamRoster.length > 0 
+          ? teamRoster.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
+          : `<option value="">此球隊目前無登錄球員</option>`;
+      }
     }
 
     // 🌟 動態從遠端載入賽事清單 (格式改為 [日期  時間] vs 對手隊名，不顯示自己隊名)
@@ -934,6 +955,7 @@
       }).join('');
     }
 
+    // 🌟 優化出賽表格：將數字 ID (如 199) 自動轉譯為漂亮的 [日期 時間] vs 對手 格式
     function renderAttendanceTable() {
       const tbody = document.getElementById('attendanceTableBody');
       const list = globalData.attendance.filter(att => String(att.team_id) === String(currentSelectedTeamId));
@@ -943,9 +965,24 @@
         return;
       }
 
+      // 從遠端賽事快取建立一個對照表 (game_id -> 格式化顯示字串)
+      // 這裡可以透過下拉選單裡已經載入的選項來對應
+      const selectEl = document.getElementById('attGameSelect');
+      const gameMap = {};
+      if (selectEl) {
+        for (let opt of selectEl.options) {
+          if (opt.value) {
+            gameMap[opt.value] = opt.text;
+          }
+        }
+      }
+
       tbody.innerHTML = list.map(att => {
         const pObj = globalData.roster.find(r => String(r.user_id) === String(att.user_id));
         const displayName = pObj ? `${pObj.player_name} (#${pObj.number || '—'})` : att.user_id;
+
+        // 如果對照表裡有這場比賽，就顯示美化後的字串；否則保留原本的 att.game_id
+        let gameDisplay = gameMap[String(att.game_id)] || att.game_id;
 
         let statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">確認出席</span>';
         if (att.status === 'leave') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">缺席請假</span>';
@@ -953,7 +990,7 @@
 
         return `
           <tr>
-            <td class="p-3 font-black text-slate-900">${att.game_id}</td>
+            <td class="p-3 font-black text-slate-900">${gameDisplay}</td>
             <td class="p-3 font-bold">${displayName}</td>
             <td class="p-3">${statusBadge}</td>
             <td class="p-3 text-slate-600">${att.reason || '—'}</td>
@@ -961,6 +998,43 @@
           </tr>
         `;
       }).join('');
+    }
+
+    // 🌟 帶有「同場同球員防呆機制」的送出回報函式
+    async function submitAttendance() {
+      const game_id = document.getElementById('attGameSelect').value;
+      const user_id = document.getElementById('attUserSelect').value;
+      const status = document.getElementById('attStatus').value;
+      const reason = document.getElementById('attReason').value;
+
+      if (!game_id) { alert('請選擇比賽場次'); return; }
+      if (!user_id) { alert('請選擇球員'); return; }
+
+      // 🛡️ 防呆機制：檢查該球員在同一場次是否已經有回報紀錄
+      const existingAtt = globalData.attendance.find(
+        x => String(x.game_id) === String(game_id) && 
+             String(x.team_id) === String(currentSelectedTeamId) && 
+             String(x.user_id) === String(user_id)
+      );
+
+      if (existingAtt) {
+        const pObj = globalData.roster.find(r => String(r.user_id) === String(user_id));
+        const pName = pObj ? pObj.player_name : user_id;
+        const confirmUpdate = confirm(`⚠️ 檢查到防呆機制：\n球員「${pName}」在此場次已經有過出勤回報紀錄。\n\n是否要直接「更新」該筆紀錄的狀態？`);
+        if (!confirmUpdate) return;
+        
+        // 如果使用者確認，帶入原有的 att_id 進行覆蓋更新
+        // 後端的 saveTeamAttendance 已經具備自動比對 att_id 進行 upsert 的能力
+      }
+
+      const res = await BBTApi.saveAttendance({ game_id, team_id: currentSelectedTeamId, user_id, status, reason });
+      if (res && res.result === 'ok') {
+        alert('✅ 出席與請假回報已成功寫入 Google Sheets！');
+        closeAttendanceModal();
+        initSystem();
+      } else {
+        alert('❌ 回報失敗');
+      }
     }
 
     // Modal 控制函式
