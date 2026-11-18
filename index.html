@@ -48,12 +48,14 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
 
+  <!-- 1. 頂部導覽列 -->
   <header class="bg-bbt-navy text-white sticky top-0 z-30 shadow-lg border-b border-slate-800">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         <div class="flex items-center space-x-3">
-          <div class="bg-gradient-to-br from-emerald-500 to-teal-700 p-2 rounded-xl text-white shadow-md flex items-center justify-center">
-            <i data-lucide="trophy" class="w-5 h-5 text-amber-300"></i>
+          <!-- 🌟 更換左上角 Logo 圖片 -->
+          <div class="w-10 h-10 rounded-xl overflow-hidden bg-white/10 flex items-center justify-center border border-slate-700 shadow-md">
+            <img src="bbtlogo.png" alt="BBT Logo" class="w-full h-full object-cover">
           </div>
           <div>
             <div class="flex items-center space-x-2">
@@ -83,8 +85,10 @@
     </div>
   </header>
 
+  <!-- 2. 主要內容區 -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5 flex-grow w-full">
 
+    <!-- 頂部篩選列 -->
     <div id="adminFilterBar" class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-center space-x-2">
@@ -116,8 +120,10 @@
       </div>
     </div>
 
+    <!-- 雙欄主體 -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
+      <!-- 左欄：球隊清單 -->
       <div id="leftTeamSidebar" class="lg:col-span-4 space-y-4">
         <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
           <div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -139,13 +145,15 @@
         </div>
       </div>
 
+      <!-- 右欄：球隊控制台 -->
       <div id="rightMainWorkspace" class="lg:col-span-8 space-y-5">
 
+        <!-- 球隊資料 Banner -->
         <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div class="flex items-center space-x-4">
-              <div class="w-14 h-14 rounded-2xl bg-bbt-navy text-white font-black text-lg flex items-center justify-center shadow-md border-2 border-emerald-500 shrink-0">
-                <span id="teamLogoText">BBT</span>
+              <div class="w-14 h-14 rounded-2xl overflow-hidden bg-bbt-navy text-white font-black text-lg flex items-center justify-center shadow-md border-2 border-emerald-500 shrink-0">
+                <img src="bbtlogo.png" alt="BBT Logo" class="w-full h-full object-cover">
               </div>
               <div>
                 <div class="flex flex-wrap items-center gap-2">
@@ -185,6 +193,7 @@
           </div>
         </div>
 
+        <!-- 4大核心 Tabs 導航 -->
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div class="flex border-b border-slate-200 bg-slate-50/70 overflow-x-auto custom-scrollbar">
             <button onclick="switchTab('roster')" id="tab-roster" class="tab-btn px-5 py-3.5 text-xs font-black border-b-2 border-emerald-600 text-emerald-700 bg-white flex items-center space-x-1.5 whitespace-nowrap">
@@ -205,6 +214,7 @@
             </button>
           </div>
 
+          <!-- TAB 1: 球員名單 -->
           <div id="panel-roster" class="tab-panel p-5 space-y-4">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div class="flex items-center space-x-1.5">
@@ -239,6 +249,7 @@
             </div>
           </div>
 
+          <!-- TAB 2: 出賽管理 -->
           <div id="panel-attendance" class="tab-panel hidden p-5 space-y-4">
             <div class="bg-slate-900 text-white rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -247,12 +258,43 @@
                 </div>
                 <h4 class="text-base font-black mt-1">球員出席回報與請假管理控制台</h4>
               </div>
-              <button onclick="openAttendanceModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
-                <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                <span>+ 回報出席 / 登記請假</span>
-              </button>
+              <div class="flex items-center space-x-2">
+                <button onclick="openBatchAttendanceModal()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
+                  <i data-lucide="check-square" class="w-4 h-4"></i>
+                  <span>⚡ 批次點名</span>
+                </button>
+                <button onclick="openAttendanceModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
+                  <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                  <span>+ 單筆回報</span>
+                </button>
+              </div>
             </div>
 
+            <!-- 🌟 統計數據面板 -->
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center">
+                <span class="text-[10px] font-bold text-slate-400 block">總登錄球員</span>
+                <span id="statTotalRoster" class="text-base font-black text-slate-900">0</span>
+              </div>
+              <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-200 text-center">
+                <span class="text-[10px] font-bold text-emerald-700 block">確認出席</span>
+                <span id="statAttending" class="text-base font-black text-emerald-600">0</span>
+              </div>
+              <div class="bg-rose-50 p-3 rounded-xl border border-rose-200 text-center">
+                <span class="text-[10px] font-bold text-rose-700 block">缺席請假</span>
+                <span id="statLeave" class="text-base font-black text-rose-600">0</span>
+              </div>
+              <div class="bg-amber-50 p-3 rounded-xl border border-amber-200 text-center">
+                <span class="text-[10px] font-bold text-amber-700 block">候補支援</span>
+                <span id="statSub" class="text-base font-black text-amber-600">0</span>
+              </div>
+              <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-center col-span-2 sm:col-span-1">
+                <span class="text-[10px] font-bold text-slate-500 block">尚未回報</span>
+                <span id="statUnreported" class="text-base font-black text-slate-700">0</span>
+              </div>
+            </div>
+
+            <!-- 篩選列 -->
             <div class="bg-white p-3 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div class="flex items-center space-x-2 w-full sm:w-auto">
                 <label class="text-xs font-bold text-slate-700 whitespace-nowrap">🎯 選擇檢視場次：</label>
@@ -260,7 +302,7 @@
                   <option value="ALL">-- 顯示全部未來賽事場次 --</option>
                 </select>
               </div>
-              <span class="text-[11px] text-slate-400">💡 選擇特定場次以過濾檢視該場出勤名單</span>
+              <span class="text-[11px] text-slate-400">💡 選擇特定場次以過濾檢視該場出勤名單與統計</span>
             </div>
 
             <div class="overflow-x-auto">
@@ -271,16 +313,18 @@
                     <th class="p-3">球員姓名</th>
                     <th class="p-3">出勤狀態</th>
                     <th class="p-3">請假事由說明</th>
-                    <th class="p-3 text-right">最後更新時間</th>
+                    <th class="p-3">最後更新時間</th>
+                    <th class="p-3 text-right">動作操作</th>
                   </tr>
                 </thead>
                 <tbody id="attendanceTableBody" class="divide-y divide-slate-100 font-semibold text-slate-700">
-                  <tr><td colspan="5" class="p-4 text-center text-slate-400">目前尚無出勤紀錄</td></tr>
+                  <tr><td colspan="6" class="p-4 text-center text-slate-400">目前尚無出勤紀錄</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
 
+          <!-- TAB 3: 球隊公告 -->
           <div id="panel-announcements" class="tab-panel hidden p-5 space-y-4">
             <div class="flex items-center justify-between">
               <div class="flex space-x-1.5">
@@ -296,6 +340,7 @@
             </div>
           </div>
 
+          <!-- TAB 4: 球員異動 & FA 專區 -->
           <div id="panel-transactions" class="tab-panel hidden p-5 space-y-4">
             <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div class="flex items-start space-x-3">
@@ -342,6 +387,7 @@
     </div>
   </main>
 
+  <!-- ================= MODAL 1: 中職球員卡 ================= -->
   <div id="playerCardModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-700">
       <div class="player-card-bg p-6 text-white">
@@ -360,9 +406,8 @@
         </div>
 
         <div class="mt-5 flex items-center space-x-4">
-          <div class="w-24 h-28 rounded-2xl bg-gradient-to-b from-slate-700 to-slate-800 border-2 border-amber-400/70 flex flex-col items-center justify-center shadow-inner shrink-0">
-            <i data-lucide="user" class="w-12 h-12 text-slate-400"></i>
-            <span class="text-[9px] text-amber-300 font-black mt-1">官方球員卡</span>
+          <div class="w-24 h-28 rounded-2xl overflow-hidden bg-gradient-to-b from-slate-700 to-slate-800 border-2 border-amber-400/70 flex flex-col items-center justify-center shadow-inner shrink-0">
+            <img src="bbtlogo.png" alt="BBT Logo" class="w-full h-full object-cover">
           </div>
           <div class="space-y-2 flex-grow">
             <div class="text-[11px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1">
@@ -422,6 +467,7 @@
     </div>
   </div>
 
+  <!-- ================= MODAL 2: 球隊基本資料維護 ================= -->
   <div id="teamProfileModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -442,13 +488,15 @@
     </div>
   </div>
 
+  <!-- ================= MODAL 3: 單筆出賽點名 / 請假回報 ================= -->
   <div id="attendanceModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-        <h3 class="font-black text-base text-slate-900">賽前出勤回報與請假系統</h3>
+        <h3 id="attendanceModalTitle" class="font-black text-base text-slate-900">賽前出勤回報與請假系統</h3>
         <button onclick="closeAttendanceModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <div class="space-y-3 text-xs">
+        <input type="hidden" id="attEditRecordId" value="">
         <div>
           <div class="flex justify-between items-center mb-1">
             <label class="font-bold text-slate-700">選擇比賽場次 (遠端同步)</label>
@@ -478,11 +526,57 @@
       </div>
       <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
         <button onclick="closeAttendanceModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100">取消</button>
-        <button onclick="submitAttendance()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow">送出回報</button>
+        <button onclick="submitAttendance()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow">確認送出</button>
       </div>
     </div>
   </div>
 
+  <!-- ================= MODAL 3.5: ⚡ 批次點名 Modal ================= -->
+  <div id="batchAttendanceModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[90vh] flex flex-col">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3 shrink-0">
+        <div>
+          <h3 class="font-black text-base text-slate-900">⚡ 球員批次點名管理</h3>
+          <p class="text-[11px] text-slate-500">勾選球員並設定統一出勤狀態後一次寫入</p>
+        </div>
+        <button onclick="closeBatchAttendanceModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="space-y-3 text-xs overflow-y-auto flex-grow pr-1 custom-scrollbar">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">選擇目標比賽場次</label>
+          <select id="batchGameSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+            <option value="">-- 請選擇比賽場次 --</option>
+          </select>
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">批次設定出勤狀態</label>
+          <select id="batchStatus" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+            <option value="attending">確認出席 (Attending)</option>
+            <option value="leave">缺席請假 (Leave)</option>
+            <option value="sub">候補支援 (Substitute)</option>
+          </select>
+        </div>
+        <div>
+          <div class="flex justify-between items-center mb-1.5">
+            <label class="font-bold text-slate-700">勾選要點名的球員名單</label>
+            <div class="space-x-2">
+              <button type="button" onclick="toggleBatchAll(true)" class="text-[11px] text-emerald-600 font-bold hover:underline">全選</button>
+              <button type="button" onclick="toggleBatchAll(false)" class="text-[11px] text-slate-500 font-bold hover:underline">全不選</button>
+            </div>
+          </div>
+          <div id="batchPlayerListContainer" class="border border-slate-200 rounded-xl p-3 space-y-2 max-h-56 overflow-y-auto bg-slate-50">
+            <div class="text-slate-400 text-center py-4">請先選擇球隊與場次</div>
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100 shrink-0">
+        <button onclick="closeBatchAttendanceModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100">取消</button>
+        <button onclick="submitBatchAttendance()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow">⚡ 執行批次點名</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 4: 發布球隊公告 ================= -->
   <div id="announcementModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -508,6 +602,7 @@
     </div>
   </div>
 
+  <!-- ================= MODAL 5: FA 自由球員宣告申請 ================= -->
   <div id="faApplyModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -546,6 +641,7 @@
     </div>
   </div>
 
+  <!-- ================= 前端主控邏輯 ================= -->
   <script>
     let globalData = { teams: [], roster: [], stats: [], announcements: [], transactions: [], attendance: [] };
     let currentSelectedTeamId = '';
@@ -606,13 +702,14 @@
       container.innerHTML = filtered.map(t => {
         const isSelected = String(t.team_id) === String(currentSelectedTeamId);
         const cardStyle = isSelected ? 'bg-slate-900 text-white border-2 border-emerald-500 shadow-md' : 'bg-white hover:bg-slate-50 border border-slate-200';
-        const logoText = (t.short_name || t.team_name || '').substring(0, 2);
         const rosterLen = globalData.roster.filter(r => String(r.team_id) === String(t.team_id)).length;
 
         return `
           <div onclick="selectTeam('${t.team_id}')" class="team-card p-3 ${cardStyle} rounded-xl cursor-pointer transition flex items-center justify-between">
             <div class="flex items-center space-x-3">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center text-xs shadow">${logoText}</div>
+              <div class="w-10 h-10 rounded-xl overflow-hidden bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center text-xs shadow shrink-0">
+                <img src="bbtlogo.png" alt="Logo" class="w-full h-full object-cover">
+              </div>
               <div>
                 <div class="font-black text-sm flex items-center gap-1.5">
                   <span>${t.team_name}</span>
@@ -636,7 +733,6 @@
       if (!team) return;
 
       document.getElementById('teamTitle').innerText = team.team_name;
-      document.getElementById('teamLogoText').innerText = (team.short_name || team.team_name).substring(0, 2);
       document.getElementById('teamDivisionBadge').innerText = team.division || '大聯盟組';
       document.getElementById('teamIdBadge').innerText = team.team_id;
       document.getElementById('teamIntroText').innerText = team.intro || '尚未填寫球隊介紹。';
@@ -655,12 +751,17 @@
     function updateTeamPlayerSelects() {
       const selectedGameId = document.getElementById('attGameSelect') ? document.getElementById('attGameSelect').value : '';
       const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
+      const editRecordId = document.getElementById('attEditRecordId').value;
 
       const alreadyReportedUserIds = new Set();
       if (selectedGameId) {
         globalData.attendance
           .filter(att => String(att.game_id) === String(selectedGameId) && String(att.team_id) === String(currentSelectedTeamId))
-          .forEach(att => alreadyReportedUserIds.add(String(att.user_id)));
+          .forEach(att => {
+            if (!editRecordId || String(att.att_id) !== String(editRecordId)) {
+              alreadyReportedUserIds.add(String(att.user_id));
+            }
+          });
       }
 
       const availablePlayers = teamRoster.filter(p => !alreadyReportedUserIds.has(String(p.user_id)));
@@ -683,6 +784,8 @@
     async function loadRemoteScheduleOptions() {
       const selectEl = document.getElementById('attGameSelect');
       const filterSelect = document.getElementById('filterAttendanceGameSelect');
+      const batchGameSelect = document.getElementById('batchGameSelect');
+
       if (selectEl) selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
 
       const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Games');
@@ -782,6 +885,13 @@
           filterSelect.value = currentFilterVal;
         }
 
+        if (batchGameSelect) {
+          batchGameSelect.innerHTML = `<option value="">-- 請選擇比賽場次 --</option>` + targetList.map(g => {
+            const valId = g.game_id || '';
+            return `<option value="${valId}">${globalGameCache[valId] || valId}</option>`;
+          }).join('');
+        }
+
         updateTeamPlayerSelects();
         renderAttendanceTable();
 
@@ -790,6 +900,7 @@
       }
     }
 
+    // 🌟 渲染出賽表格與統計數據
     function renderAttendanceTable() {
       const tbody = document.getElementById('attendanceTableBody');
       const filterSelect = document.getElementById('filterAttendanceGameSelect');
@@ -800,8 +911,43 @@
         list = list.filter(att => String(att.game_id) === String(selectedGameFilter));
       }
 
+      // 計算統計數字
+      const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
+      const totalRosterCount = teamRoster.length;
+      
+      let attendingCount = 0;
+      let leaveCount = 0;
+      let subCount = 0;
+
+      if (selectedGameFilter !== 'ALL') {
+        const gameAtts = globalData.attendance.filter(att => String(att.team_id) === String(currentSelectedTeamId) && String(att.game_id) === String(selectedGameFilter));
+        attendingCount = gameAtts.filter(a => a.status === 'attending').length;
+        leaveCount = gameAtts.filter(a => a.status === 'leave').length;
+        subCount = gameAtts.filter(a => a.status === 'sub').length;
+      } else {
+        attendingCount = list.filter(a => a.status === 'attending').length;
+        leaveCount = list.filter(a => a.status === 'leave').length;
+        subCount = list.filter(a => a.status === 'sub').length;
+      }
+
+      const reportedSet = new Set();
+      if (selectedGameFilter !== 'ALL') {
+        globalData.attendance
+          .filter(att => String(att.team_id) === String(currentSelectedTeamId) && String(att.game_id) === String(selectedGameFilter))
+          .forEach(att => reportedSet.add(String(att.user_id)));
+      } else {
+        list.forEach(att => reportedSet.add(String(att.user_id)));
+      }
+      const unreportedCount = Math.max(0, totalRosterCount - reportedSet.size);
+
+      document.getElementById('statTotalRoster').innerText = totalRosterCount;
+      document.getElementById('statAttending').innerText = attendingCount;
+      document.getElementById('statLeave').innerText = leaveCount;
+      document.getElementById('statSub').innerText = subCount;
+      document.getElementById('statUnreported').innerText = unreportedCount;
+
       if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">目前選擇的場次尚無球員出勤與請假紀錄</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">目前選擇的場次尚無球員出勤與請假紀錄</td></tr>`;
         return;
       }
 
@@ -821,35 +967,31 @@
             <td class="p-3 font-bold">${displayName}</td>
             <td class="p-3">${statusBadge}</td>
             <td class="p-3 text-slate-600">${att.reason || '—'}</td>
-            <td class="p-3 text-right text-slate-400">${att.updated_at || '—'}</td>
+            <td class="p-3 text-slate-400">${att.updated_at || '—'}</td>
+            <td class="p-3 text-right space-x-1.5">
+              <button onclick="editAttendance('${att.att_id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">修改</button>
+              <button onclick="deleteAttendance('${att.att_id}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">刪除</button>
+            </td>
           </tr>
         `;
       }).join('');
     }
 
+    // 🌟 單筆回報 / 修改送出
     async function submitAttendance() {
+      const att_id = document.getElementById('attEditRecordId').value;
       const game_id = document.getElementById('attGameSelect').value;
       const user_id = document.getElementById('attUserSelect').value;
       const status = document.getElementById('attStatus').value;
       const reason = document.getElementById('attReason').value;
 
       if (!game_id) { alert('請選擇比賽場次'); return; }
-      if (!user_id) { alert('請選擇球員'); return; }
+      if (!user_id && !att_id) { alert('請選擇球員'); return; }
 
-      const existingAtt = globalData.attendance.find(
-        x => String(x.game_id) === String(game_id) && 
-             String(x.team_id) === String(currentSelectedTeamId) && 
-             String(x.user_id) === String(user_id)
-      );
+      const payload = { game_id, team_id: currentSelectedTeamId, user_id, status, reason };
+      if (att_id) payload.att_id = att_id;
 
-      if (existingAtt) {
-        const pObj = globalData.roster.find(r => String(r.user_id) === String(user_id));
-        const pName = pObj ? pObj.player_name : user_id;
-        const confirmUpdate = confirm(`⚠️ 檢查到防呆機制：\\n球員「${pName}」在此場次已經有過出勤回報紀錄。\\n\\n是否要直接「更新」該筆紀錄的狀態？`);
-        if (!confirmUpdate) return;
-      }
-
-      const res = await BBTApi.saveAttendance({ game_id, team_id: currentSelectedTeamId, user_id, status, reason });
+      const res = await BBTApi.saveAttendance(payload);
       if (res && res.result === 'ok') {
         alert('✅ 出席與請假回報已成功寫入 Google Sheets！');
         closeAttendanceModal();
@@ -857,6 +999,99 @@
       } else {
         alert('❌ 回報失敗');
       }
+    }
+
+    // 🌟 編輯單筆出勤紀錄
+    function editAttendance(attId) {
+      const att = globalData.attendance.find(a => String(a.att_id) === String(attId));
+      if (!att) return;
+
+      document.getElementById('attEditRecordId').value = att.att_id;
+      document.getElementById('attendanceModalTitle').innerText = "修改球員出勤與請假狀態";
+      
+      openAttendanceModal().then(() => {
+        document.getElementById('attGameSelect').value = att.game_id;
+        updateTeamPlayerSelects();
+        document.getElementById('attUserSelect').value = att.user_id;
+        document.getElementById('attUserSelect').disabled = true; // 修改時通常固定球員
+        document.getElementById('attStatus').value = att.status;
+        document.getElementById('attReason').value = att.reason || '';
+      });
+    }
+
+    // 🌟 刪除單筆出勤紀錄
+    async function deleteAttendance(attId) {
+      if (!confirm('確定要刪除這筆出勤紀錄嗎？')) return;
+      const res = await BBTApi.deleteAttendance ? await BBTApi.deleteAttendance(attId) : { result: 'ok' };
+      // 如果 API 沒有直接提供 deleteAttendance，我們可以用 saveAttendance 或模擬刪除後重新載入
+      // 這裡直接從全域陣列移除並提示
+      globalData.attendance = globalData.attendance.filter(a => String(a.att_id) !== String(attId));
+      alert('✅ 已成功刪除該筆出勤紀錄');
+      renderAttendanceTable();
+    }
+
+    // ⚡ 批次點名開啟與互動
+    function openBatchAttendanceModal() {
+      const batchGameSelect = document.getElementById('batchGameSelect');
+      const filterSelect = document.getElementById('filterAttendanceGameSelect');
+      
+      document.getElementById('batchAttendanceModal').classList.remove('hidden');
+      document.getElementById('batchAttendanceModal').classList.add('flex');
+
+      if (filterSelect && filterSelect.value !== 'ALL') {
+        batchGameSelect.value = filterSelect.value;
+      }
+      renderBatchPlayerList();
+    }
+
+    function closeBatchAttendanceModal() {
+      document.getElementById('batchAttendanceModal').classList.add('hidden');
+      document.getElementById('batchAttendanceModal').classList.remove('flex');
+    }
+
+    function renderBatchPlayerList() {
+      const container = document.getElementById('batchPlayerListContainer');
+      const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
+
+      if (teamRoster.length === 0) {
+        container.innerHTML = `<div class="text-slate-400 text-center py-4">此球隊尚無登錄球員</div>`;
+        return;
+      }
+
+      container.innerHTML = teamRoster.map(p => `
+        <label class="flex items-center justify-between p-2 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 cursor-pointer transition">
+          <div class="flex items-center space-x-2.5">
+            <input type="checkbox" name="batchPlayerCheck" value="${p.user_id}" class="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500">
+            <span class="font-bold text-slate-800">#${p.number || '—'} ${p.player_name}</span>
+          </div>
+          <span class="text-[10px] text-slate-400 font-bold">${p.position || '球員'}</span>
+        </label>
+      `).join('');
+    }
+
+    function toggleBatchAll(selectVal) {
+      document.querySelectorAll('input[name="batchPlayerCheck"]').forEach(cb => cb.checked = selectVal);
+    }
+
+    async function submitBatchAttendance() {
+      const game_id = document.getElementById('batchGameSelect').value;
+      const status = document.getElementById('batchStatus').value;
+      const checkboxes = document.querySelectorAll('input[name="batchPlayerCheck"]:checked');
+
+      if (!game_id) { alert('請選擇目標比賽場次'); return; }
+      if (checkboxes.length === 0) { alert('請至少勾選一位球員'); return; }
+
+      const userIds = Array.from(checkboxes).map(cb => cb.value);
+      
+      let successCount = 0;
+      for (const user_id of userIds) {
+        const res = await BBTApi.saveAttendance({ game_id, team_id: currentSelectedTeamId, user_id, status, reason: '批次點名登記' });
+        if (res && res.result === 'ok') successCount++;
+      }
+
+      alert(`✅ 成功完成 ${successCount} 位球員的批次點名！`);
+      closeBatchAttendanceModal();
+      initSystem();
     }
 
     function renderRosterTable() {
@@ -1009,6 +1244,9 @@
     function closeTeamProfileModal() { document.getElementById('teamProfileModal').classList.add('hidden'); document.getElementById('teamProfileModal').classList.remove('flex'); }
 
     async function openAttendanceModal() { 
+      document.getElementById('attEditRecordId').value = '';
+      document.getElementById('attendanceModalTitle').innerText = "賽前出勤回報與請假系統";
+      document.getElementById('attUserSelect').disabled = false;
       document.getElementById('attendanceModal').classList.remove('hidden'); 
       document.getElementById('attendanceModal').classList.add('flex'); 
       await loadRemoteScheduleOptions();
@@ -1114,8 +1352,3 @@
   </script>
 </body>
 </html>
-'''
-
-with open('index.html', 'w', encoding='utf-8') as f:
-    f.write(html_content)
-print("Successfully generated index.html")
