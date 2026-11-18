@@ -252,18 +252,19 @@
             </div>
           </div>
 
-          <!-- TAB 2: 出賽管理 (點名/請假/候補) -->
+          <!-- TAB 2: 出賽管理 (點名/請假/候補) - 已可寫入 -->
           <div id="panel-attendance" class="tab-panel hidden p-5 space-y-4">
             <div class="bg-slate-900 text-white rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div class="flex items-center space-x-2">
-                  <span class="bg-emerald-500 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded uppercase">賽前出勤點名</span>
-                  <span class="text-xs text-slate-300 font-bold">同步自 Google Sheets `Team_Attendance`</span>
+                  <span class="bg-emerald-500 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded uppercase">出賽管理模組</span>
+                  <span class="text-xs text-slate-300 font-bold">同步寫入 Google Sheets `Team_Attendance`</span>
                 </div>
-                <h4 class="text-base font-black mt-1">球員出席回報與請假審核控制台</h4>
+                <h4 class="text-base font-black mt-1">球員出席回報與請假管理控制台</h4>
               </div>
-              <button onclick="openAttendanceModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow">
-                + 回報出席 / 登記請假
+              <button onclick="openAttendanceModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                <span>+ 回報出席 / 登記請假</span>
               </button>
             </div>
 
@@ -272,7 +273,7 @@
                 <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                   <tr>
                     <th class="p-3">場次 ID (game_id)</th>
-                    <th class="p-3">球員編號 / 姓名</th>
+                    <th class="p-3">球員代號 (user_id)</th>
                     <th class="p-3">出勤狀態</th>
                     <th class="p-3">請假事由說明</th>
                     <th class="p-3 text-right">最後更新時間</th>
@@ -285,15 +286,15 @@
             </div>
           </div>
 
-          <!-- TAB 3: 球隊公告 -->
+          <!-- TAB 3: 球隊公告 - 已可寫入 -->
           <div id="panel-announcements" class="tab-panel hidden p-5 space-y-4">
             <div class="flex items-center justify-between">
               <div class="flex space-x-1.5">
                 <span class="bg-slate-800 text-white text-xs font-bold px-3 py-1 rounded-lg">隊內佈告欄</span>
               </div>
-              <button onclick="openAnnouncementModal()" class="bg-bbt-navy hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow flex items-center space-x-1">
+              <button onclick="openAnnouncementModal()" class="bg-bbt-navy hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow flex items-center space-x-1.5">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                <span>發布隊內公告</span>
+                <span>+ 發布隊內公告</span>
               </button>
             </div>
             <div id="announcementsContainer" class="space-y-2.5">
@@ -301,7 +302,7 @@
             </div>
           </div>
 
-          <!-- TAB 4: 球員異動 & FA 專區 -->
+          <!-- TAB 4: 球員異動 & FA 專區 - 已可寫入 -->
           <div id="panel-transactions" class="tab-panel hidden p-5 space-y-4">
             <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div class="flex items-start space-x-3">
@@ -310,7 +311,7 @@
                 </div>
                 <div>
                   <h4 class="font-black text-sm text-amber-950">BBT 自由球員 (FA) 宣告與轉隊整合系統</h4>
-                  <p class="text-xs text-amber-800 mt-0.5">符合年資與出賽條件之球員可於此宣告 FA，連動官網 `fa.php`。</p>
+                  <p class="text-xs text-amber-800 mt-0.5">符合年資與出賽條件之球員可於此宣告 FA，即時寫入 `Player_Transactions` 並連動官網 `fa.php`。</p>
                 </div>
               </div>
               <div class="flex items-center space-x-2 shrink-0">
@@ -450,7 +451,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 3: 出賽點名 / 請假回報 ================= -->
+  <!-- ================= MODAL 3: 出賽點名 / 請假回報 (寫入 Team_Attendance) ================= -->
   <div id="attendanceModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -477,7 +478,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 4: 發布球隊公告 ================= -->
+  <!-- ================= MODAL 4: 發布球隊公告 (寫入 Team_Announcements) ================= -->
   <div id="announcementModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -503,7 +504,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 5: FA 自由球員宣告申請 ================= -->
+  <!-- ================= MODAL 5: FA 自由球員宣告申請 (寫入 Player_Transactions) ================= -->
   <div id="faApplyModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -821,7 +822,7 @@
       }
     }
 
-    // 送出出勤回報
+    // 送出出勤回報 (寫入 Team_Attendance)
     async function submitAttendance() {
       const game_id = document.getElementById('attGameId').value;
       const user_id = document.getElementById('attUserId').value;
@@ -830,7 +831,7 @@
 
       const res = await BBTApi.saveAttendance({ game_id, team_id: currentSelectedTeamId, user_id, status, reason });
       if (res && res.result === 'ok') {
-        alert('✅ 出席與請假回報已成功寫入 Google Sheets！');
+        alert('✅ 出席與請假回報已成功寫入 Google Sheets (`Team_Attendance`)！');
         closeAttendanceModal();
         initSystem();
       } else {
@@ -838,7 +839,7 @@
       }
     }
 
-    // 發布公告
+    // 發布公告 (寫入 Team_Announcements)
     async function submitAnnouncement() {
       const category = document.getElementById('annCategory').value;
       const title = document.getElementById('annTitle').value;
@@ -848,7 +849,7 @@
 
       const res = await BBTApi.saveAnnouncement({ team_id: currentSelectedTeamId, category, title, content });
       if (res && res.result === 'ok') {
-        alert('✅ 公告已成功發布！');
+        alert('✅ 公告已成功發布並寫入 Google Sheets (`Team_Announcements`)！');
         closeAnnouncementModal();
         initSystem();
       } else {
@@ -856,14 +857,14 @@
       }
     }
 
-    // 宣告 FA
+    // 宣告 FA (寫入 Player_Transactions)
     async function submitFaApply() {
       const user_id = document.getElementById('faUserId').value;
       const note = document.getElementById('faNote').value;
 
       const res = await BBTApi.saveTransaction({ tx_type: 'FA申請', user_id, from_team_id: currentSelectedTeamId, to_team_id: 'FA_MARKET', note });
       if (res && res.result === 'ok') {
-        alert('✅ FA 宣告申請已送出，待聯盟審核後將同步至 fa.php 市場！');
+        alert('✅ FA 宣告申請已送出並寫入 Google Sheets (`Player_Transactions`)，待聯盟審核後將連動 `fa.php`！');
         closeFaApplyModal();
         initSystem();
       } else {
