@@ -252,7 +252,7 @@
             </div>
           </div>
 
-          <!-- TAB 2: 出賽管理 (點名/請假/候補) - 已可寫入 -->
+          <!-- TAB 2: 出賽管理 -->
           <div id="panel-attendance" class="tab-panel hidden p-5 space-y-4">
             <div class="bg-slate-900 text-white rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -273,7 +273,7 @@
                 <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                   <tr>
                     <th class="p-3">場次 ID (game_id)</th>
-                    <th class="p-3">球員代號 (user_id)</th>
+                    <th class="p-3">球員姓名 (user_id)</th>
                     <th class="p-3">出勤狀態</th>
                     <th class="p-3">請假事由說明</th>
                     <th class="p-3 text-right">最後更新時間</th>
@@ -286,7 +286,7 @@
             </div>
           </div>
 
-          <!-- TAB 3: 球隊公告 - 已可寫入 -->
+          <!-- TAB 3: 球隊公告 -->
           <div id="panel-announcements" class="tab-panel hidden p-5 space-y-4">
             <div class="flex items-center justify-between">
               <div class="flex space-x-1.5">
@@ -302,7 +302,7 @@
             </div>
           </div>
 
-          <!-- TAB 4: 球員異動 & FA 專區 - 已可寫入 -->
+          <!-- TAB 4: 球員異動 & FA 專區 -->
           <div id="panel-transactions" class="tab-panel hidden p-5 space-y-4">
             <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div class="flex items-start space-x-3">
@@ -331,7 +331,7 @@
                   <tr>
                     <th class="p-3">申請日期</th>
                     <th class="p-3">異動類型</th>
-                    <th class="p-3">球員 ID</th>
+                    <th class="p-3">球員姓名</th>
                     <th class="p-3">異動說明</th>
                     <th class="p-3 text-right">審核狀態</th>
                   </tr>
@@ -451,7 +451,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 3: 出賽點名 / 請假回報 (寫入 Team_Attendance) ================= -->
+  <!-- ================= MODAL 3: 出賽點名 / 請假回報 (改為下拉選單選球員) ================= -->
   <div id="attendanceModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -460,7 +460,15 @@
       </div>
       <div class="space-y-3 text-xs">
         <div><label class="font-bold text-slate-700 block mb-1">場次代號 (game_id)</label><input type="text" id="attGameId" value="G042" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold"></div>
-        <div><label class="font-bold text-slate-700 block mb-1">球員代號 (user_id)</label><input type="text" id="attUserId" value="U1024" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold"></div>
+        
+        <!-- 改為下拉選單：直接讀取該球隊名單 -->
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">選擇球員 (免輸代號)</label>
+          <select id="attUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+            <option value="">-- 請先選擇球隊或載入球員 --</option>
+          </select>
+        </div>
+
         <div>
           <label class="font-bold text-slate-700 block mb-1">出勤狀態</label>
           <select id="attStatus" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
@@ -478,7 +486,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 4: 發布球隊公告 (寫入 Team_Announcements) ================= -->
+  <!-- ================= MODAL 4: 發布球隊公告 ================= -->
   <div id="announcementModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -504,7 +512,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 5: FA 自由球員宣告申請 (寫入 Player_Transactions) ================= -->
+  <!-- ================= MODAL 5: FA 自由球員宣告申請 (改為條件點選 + 自行輸入) ================= -->
   <div id="faApplyModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -512,9 +520,31 @@
         <button onclick="closeFaApplyModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <div class="space-y-3 text-xs">
-        <p class="text-slate-500">依據聯盟 FA 規範，須符合年資與出賽率門檻。請輸入您的球員代號進行系統檢核：</p>
-        <div><label class="font-bold text-slate-700 block mb-1">球員代號 (user_id)</label><input type="text" id="faUserId" value="U1024" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold"></div>
-        <div><label class="font-bold text-slate-700 block mb-1">宣告備註 / 條件說明</label><input type="text" id="faNote" value="符合滿兩季出賽70%條件，正式宣告FA" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold"></div>
+        <p class="text-slate-500">依據聯盟 FA 規範，請選擇您的球員身分並套用或自訂符合條件：</p>
+        
+        <!-- 改為下拉選單選球員 -->
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">選擇球員 (免輸代號)</label>
+          <select id="faUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+            <option value="">-- 請選擇球員 --</option>
+          </select>
+        </div>
+
+        <!-- FA 條件快速點選 -->
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">快速套用聯盟 FA 規定條件</label>
+          <select id="faPresetSelect" onchange="document.getElementById('faNote').value=this.value;" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-slate-50 text-emerald-700">
+            <option value="符合滿兩季出賽70%條件，正式宣告FA">✅ 符合滿兩季出賽 70% 條件</option>
+            <option value="合約到期自動取得自由球員權利，宣告FA">✅ 合約到期自動取得自由球員權利</option>
+            <option value="經原球隊同意釋出，宣告行使FA權利">✅ 經原球隊同意釋出</option>
+            <option value="">✏️ 自行輸入下方說明</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">宣告備註 / 條件說明 (可自行輸入修改)</label>
+          <input type="text" id="faNote" value="符合滿兩季出賽70%條件，正式宣告FA" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+        </div>
       </div>
       <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
         <button onclick="closeFaApplyModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100">取消</button>
@@ -624,6 +654,18 @@
       renderRosterTable();
       renderAnnouncements();
       renderAttendanceTable();
+      updateTeamPlayerSelects();
+    }
+
+    // 動態更新 Modal 中的球員下拉選單 (依據目前選擇的球隊名單)
+    function updateTeamPlayerSelects() {
+      const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
+      const optionsHtml = teamRoster.length > 0 
+        ? teamRoster.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
+        : `<option value="">此球隊目前無登錄球員</option>`;
+
+      document.getElementById('attUserSelect').innerHTML = optionsHtml;
+      document.getElementById('faUserSelect').innerHTML = optionsHtml;
     }
 
     function renderRosterTable() {
@@ -756,15 +798,20 @@
         return;
       }
 
-      tbody.innerHTML = txs.map(tx => `
-        <tr>
-          <td class="p-3 text-slate-500">${tx.tx_date || '—'}</td>
-          <td class="p-3"><span class="bg-purple-100 text-purple-800 font-black px-2 py-0.5 rounded">${tx.tx_type}</span></td>
-          <td class="p-3 font-black text-slate-900">${tx.user_id}</td>
-          <td class="p-3">${tx.note || '—'}</td>
-          <td class="p-3 text-right"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">${tx.admin_status}</span></td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = txs.map(tx => {
+        const pObj = globalData.roster.find(r => String(r.user_id) === String(tx.user_id));
+        const displayName = pObj ? `${pObj.player_name} (${tx.user_id})` : tx.user_id;
+
+        return `
+          <tr>
+            <td class="p-3 text-slate-500">${tx.tx_date || '—'}</td>
+            <td class="p-3"><span class="bg-purple-100 text-purple-800 font-black px-2 py-0.5 rounded">${tx.tx_type}</span></td>
+            <td class="p-3 font-black text-slate-900">${displayName}</td>
+            <td class="p-3">${tx.note || '—'}</td>
+            <td class="p-3 text-right"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">${tx.admin_status}</span></td>
+          </tr>
+        `;
+      }).join('');
     }
 
     function renderAttendanceTable() {
@@ -777,6 +824,9 @@
       }
 
       tbody.innerHTML = list.map(att => {
+        const pObj = globalData.roster.find(r => String(r.user_id) === String(att.user_id));
+        const displayName = pObj ? `${pObj.player_name} (#${pObj.number || '—'})` : att.user_id;
+
         let statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">確認出席</span>';
         if (att.status === 'leave') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">缺席請假</span>';
         if (att.status === 'sub') statusBadge = '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">候補支援</span>';
@@ -784,7 +834,7 @@
         return `
           <tr>
             <td class="p-3 font-black text-slate-900">${att.game_id}</td>
-            <td class="p-3 font-bold">${att.user_id}</td>
+            <td class="p-3 font-bold">${displayName}</td>
             <td class="p-3">${statusBadge}</td>
             <td class="p-3 text-slate-600">${att.reason || '—'}</td>
             <td class="p-3 text-right text-slate-400">${att.updated_at || '—'}</td>
@@ -806,7 +856,6 @@
     function openFaApplyModal() { document.getElementById('faApplyModal').classList.remove('hidden'); document.getElementById('faApplyModal').classList.add('flex'); }
     function closeFaApplyModal() { document.getElementById('faApplyModal').classList.add('hidden'); document.getElementById('faApplyModal').classList.remove('flex'); }
 
-    // 儲存球隊基本資料
     async function saveCurrentTeamProfile() {
       const intro = document.getElementById('editTeamIntro').value;
       const contact = document.getElementById('editTeamContact').value;
@@ -822,16 +871,17 @@
       }
     }
 
-    // 送出出勤回報 (寫入 Team_Attendance)
     async function submitAttendance() {
       const game_id = document.getElementById('attGameId').value;
-      const user_id = document.getElementById('attUserId').value;
+      const user_id = document.getElementById('attUserSelect').value;
       const status = document.getElementById('attStatus').value;
       const reason = document.getElementById('attReason').value;
 
+      if (!user_id) { alert('請選擇球員'); return; }
+
       const res = await BBTApi.saveAttendance({ game_id, team_id: currentSelectedTeamId, user_id, status, reason });
       if (res && res.result === 'ok') {
-        alert('✅ 出席與請假回報已成功寫入 Google Sheets (`Team_Attendance`)！');
+        alert('✅ 出席與請假回報已成功寫入 Google Sheets！');
         closeAttendanceModal();
         initSystem();
       } else {
@@ -839,7 +889,6 @@
       }
     }
 
-    // 發布公告 (寫入 Team_Announcements)
     async function submitAnnouncement() {
       const category = document.getElementById('annCategory').value;
       const title = document.getElementById('annTitle').value;
@@ -849,7 +898,7 @@
 
       const res = await BBTApi.saveAnnouncement({ team_id: currentSelectedTeamId, category, title, content });
       if (res && res.result === 'ok') {
-        alert('✅ 公告已成功發布並寫入 Google Sheets (`Team_Announcements`)！');
+        alert('✅ 公告已成功發布！');
         closeAnnouncementModal();
         initSystem();
       } else {
@@ -857,14 +906,15 @@
       }
     }
 
-    // 宣告 FA (寫入 Player_Transactions)
     async function submitFaApply() {
-      const user_id = document.getElementById('faUserId').value;
+      const user_id = document.getElementById('faUserSelect').value;
       const note = document.getElementById('faNote').value;
+
+      if (!user_id) { alert('請選擇球員'); return; }
 
       const res = await BBTApi.saveTransaction({ tx_type: 'FA申請', user_id, from_team_id: currentSelectedTeamId, to_team_id: 'FA_MARKET', note });
       if (res && res.result === 'ok') {
-        alert('✅ FA 宣告申請已送出並寫入 Google Sheets (`Player_Transactions`)，待聯盟審核後將連動 `fa.php`！');
+        alert('✅ FA 宣告申請已送出，待聯盟審核後將同步至 fa.php 市場！');
         closeFaApplyModal();
         initSystem();
       } else {
