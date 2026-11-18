@@ -677,7 +677,7 @@
       document.getElementById('faUserSelect').innerHTML = optionsHtml;
     }
 
-    // 🌟 動態從遠端載入賽事清單 (使用 game_id 當 value，顯示 [game_code] 日期 時間 (對戰))
+    // 🌟 動態從遠端載入賽事清單 (格式改為 [日期  時間] vs 對手隊名，不顯示自己隊名)
     async function loadRemoteScheduleOptions() {
       const selectEl = document.getElementById('attGameSelect');
       selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
@@ -725,18 +725,35 @@
 
         if (targetList.length > 0) {
           selectEl.innerHTML = targetList.map(g => {
-            // 💡 確保 value 是 game_id (內部主鍵)，顯示用 game_code
             const valId = g.game_id || '';
-            const codeDisplay = g.game_code ? `[${g.game_code}]` : `[${valId}]`;
+            const home = String(g.home_team || '').trim();
+            const away = String(g.away_team || '').trim();
             
-            // 格式化日期：YYYY/MM/DD
+            // 判斷對手隊名（如果自己是主隊，對手就是客隊；反之則為主隊）
+            let opponent = '';
+            if (teamName) {
+              if (home === teamName) {
+                opponent = away;
+              } else if (away === teamName) {
+                opponent = home;
+              } else {
+                // 萬一名稱未完全匹配，預設顯示扣掉自己或兩隊都列出
+                opponent = home === teamName ? away : (away === teamName ? home : `${home} vs ${away}`);
+              }
+            } else {
+              opponent = `${home} vs ${away}`;
+            }
+
+            // 格式化日期：MM/DD (若需要完整年份可維持 YYYY/MM/DD)
             let dateStr = '';
             if (g.date) {
               const d = new Date(g.date);
               if (!isNaN(d.getTime())) {
-                dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+                dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
               } else {
-                dateStr = String(g.date).split('T')[0].replace(/-/g, '/');
+                const parts = String(g.date).split('T')[0].split('-');
+                if (parts.length === 3) dateStr = `${parts[1]}/${parts[2]}`;
+                else dateStr = String(g.date).split('T')[0];
               }
             }
 
@@ -758,10 +775,9 @@
             }
 
             const dateTimeDisplay = timeStr ? `${dateStr} ${timeStr}` : dateStr;
-            const matchup = `${g.home_team || '主隊'} vs ${g.away_team || '客隊'}`;
             
-            // 💡 格式：[game_code] 日期 時間 (對戰組合)
-            return `<option value="${valId}">${codeDisplay} ${dateTimeDisplay} (${matchup})</option>`;
+            // 💡 格式：[日期 時間] vs 對手
+            return `<option value="${valId}">[${dateTimeDisplay}] vs ${opponent}</option>`;
           }).join('');
         } else {
           selectEl.innerHTML = `<option value="">本週及之後目前無該球隊的賽事</option>`;
