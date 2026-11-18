@@ -4,11 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BBT 軟式棒球聯盟 - 球隊與球員管理控制台</title>
-  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- 引入 API 串接模組 -->
   <script src="js/api.js"></script>
   <script>
     tailwind.config = {
@@ -32,7 +29,6 @@
     body { font-family: 'Noto Sans TC', sans-serif; }
     .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    
     .player-card-bg {
       background: linear-gradient(135deg, #0b132b 0%, #1e293b 50%, #0f172a 100%);
       position: relative;
@@ -52,7 +48,6 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
 
-  <!-- 1. 頂部導覽列 -->
   <header class="bg-bbt-navy text-white sticky top-0 z-30 shadow-lg border-b border-slate-800">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
@@ -88,10 +83,8 @@
     </div>
   </header>
 
-  <!-- 2. 主要內容區 -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5 flex-grow w-full">
 
-    <!-- 頂部篩選列 -->
     <div id="adminFilterBar" class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-center space-x-2">
@@ -123,10 +116,8 @@
       </div>
     </div>
 
-    <!-- 雙欄主體 -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
-      <!-- 左欄：球隊清單 -->
       <div id="leftTeamSidebar" class="lg:col-span-4 space-y-4">
         <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
           <div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -148,10 +139,8 @@
         </div>
       </div>
 
-      <!-- 右欄：球隊控制台 -->
       <div id="rightMainWorkspace" class="lg:col-span-8 space-y-5">
 
-        <!-- 球隊資料 Banner -->
         <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div class="flex items-center space-x-4">
@@ -196,7 +185,6 @@
           </div>
         </div>
 
-        <!-- 4大核心 Tabs 導航 -->
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div class="flex border-b border-slate-200 bg-slate-50/70 overflow-x-auto custom-scrollbar">
             <button onclick="switchTab('roster')" id="tab-roster" class="tab-btn px-5 py-3.5 text-xs font-black border-b-2 border-emerald-600 text-emerald-700 bg-white flex items-center space-x-1.5 whitespace-nowrap">
@@ -217,7 +205,6 @@
             </button>
           </div>
 
-          <!-- TAB 1: 球員名單 -->
           <div id="panel-roster" class="tab-panel p-5 space-y-4">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div class="flex items-center space-x-1.5">
@@ -252,7 +239,6 @@
             </div>
           </div>
 
-          <!-- TAB 2: 出賽管理 -->
           <div id="panel-attendance" class="tab-panel hidden p-5 space-y-4">
             <div class="bg-slate-900 text-white rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -267,7 +253,6 @@
               </button>
             </div>
 
-            <!-- 🌟 新增：先選賽事再呈現名單的篩選列 -->
             <div class="bg-white p-3 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div class="flex items-center space-x-2 w-full sm:w-auto">
                 <label class="text-xs font-bold text-slate-700 whitespace-nowrap">🎯 選擇檢視場次：</label>
@@ -296,7 +281,6 @@
             </div>
           </div>
 
-          <!-- TAB 3: 球隊公告 -->
           <div id="panel-announcements" class="tab-panel hidden p-5 space-y-4">
             <div class="flex items-center justify-between">
               <div class="flex space-x-1.5">
@@ -312,7 +296,6 @@
             </div>
           </div>
 
-          <!-- TAB 4: 球員異動 & FA 專區 -->
           <div id="panel-transactions" class="tab-panel hidden p-5 space-y-4">
             <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div class="flex items-start space-x-3">
@@ -359,7 +342,6 @@
     </div>
   </main>
 
-  <!-- ================= MODAL 1: 中職球員卡 ================= -->
   <div id="playerCardModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-700">
       <div class="player-card-bg p-6 text-white">
@@ -440,7 +422,6 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 2: 球隊基本資料維護 ================= -->
   <div id="teamProfileModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -461,7 +442,6 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 3: 出賽點名 / 請假回報 (改為遠端賽事下拉選單) ================= -->
   <div id="attendanceModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -469,7 +449,6 @@
         <button onclick="closeAttendanceModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <div class="space-y-3 text-xs">
-        <!-- 🌟 改為遠端賽事下拉選單 -->
         <div>
           <div class="flex justify-between items-center mb-1">
             <label class="font-bold text-slate-700">選擇比賽場次 (遠端同步)</label>
@@ -480,7 +459,6 @@
           </select>
         </div>
         
-        <!-- 下拉選單選球員 -->
         <div>
           <label class="font-bold text-slate-700 block mb-1">選擇球員 (免輸代號)</label>
           <select id="attUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
@@ -505,7 +483,6 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 4: 發布球隊公告 ================= -->
   <div id="announcementModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -531,7 +508,6 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 5: FA 自由球員宣告申請 ================= -->
   <div id="faApplyModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -554,7 +530,7 @@
             <option value="符合滿兩季出賽70%條件，正式宣告FA">✅ 符合滿兩季出賽 70% 條件</option>
             <option value="合約到期自動取得自由球員權利，宣告FA">✅ 合約到期自動取得自由球員權利</option>
             <option value="經原球隊同意釋出，宣告行使FA權利">✅ 經原球隊同意釋出</option>
-            <option value="">✏️ 自行輸入下方說明</option>
+            <option value="✏️ 自行輸入下方說明">✏️ 自行輸入下方說明</option>
           </select>
         </div>
 
@@ -570,7 +546,6 @@
     </div>
   </div>
 
-  <!-- ================= 前端主控邏輯 ================= -->
   <script>
     let globalData = { teams: [], roster: [], stats: [], announcements: [], transactions: [], attendance: [] };
     let currentSelectedTeamId = '';
@@ -578,9 +553,9 @@
     let currentSeason = '2026-S18';
     let currentRosterFilter = 'all';
     let activePlayerCardCache = null;
+    let globalGameCache = {};
 
-    // 🌟 設定遠端共用賽事表 ID (可隨時切換正式與測試)
-    const REMOTE_SCHEDULE_SHEET_ID = '1kgJti-vuALVDPhVWHdb0G5_Ows4Usp61Y00L9JMrrmw'; // 正式 ID
+    const REMOTE_SCHEDULE_SHEET_ID = '1kgJti-vuALVDPhVWHdb0G5_Ows4Usp61Y00L9JMrrmw';
 
     document.addEventListener('DOMContentLoaded', async () => {
       await initSystem();
@@ -599,7 +574,8 @@
         renderTeamSidebar();
         renderAnnouncements();
         renderTransactions();
-        renderAttendanceTable();
+        
+        await loadRemoteScheduleOptions();
 
         const filteredTeams = globalData.teams.filter(t => String(t.division).trim() === currentDivision);
         if (filteredTeams.length > 0) {
@@ -673,16 +649,13 @@
 
       renderRosterTable();
       renderAnnouncements();
-      renderAttendanceTable();
-      updateTeamPlayerSelects();
+      loadRemoteScheduleOptions();
     }
 
-    // 🌟 更新球員下拉選單（自動過濾掉「本場比賽已回報過」的球員，實現防呆）
     function updateTeamPlayerSelects() {
       const selectedGameId = document.getElementById('attGameSelect') ? document.getElementById('attGameSelect').value : '';
       const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
 
-      // 找出該場次已經回報過的球員 user_id 集合
       const alreadyReportedUserIds = new Set();
       if (selectedGameId) {
         globalData.attendance
@@ -690,7 +663,6 @@
           .forEach(att => alreadyReportedUserIds.add(String(att.user_id)));
       }
 
-      // 過濾掉已經回報過的球員
       const availablePlayers = teamRoster.filter(p => !alreadyReportedUserIds.has(String(p.user_id)));
 
       const optionsHtml = availablePlayers.length > 0 
@@ -702,17 +674,16 @@
 
       const faUserSelect = document.getElementById('faUserSelect');
       if (faUserSelect) {
-        // FA 專區維持顯示全部球員
         faUserSelect.innerHTML = teamRoster.length > 0 
           ? teamRoster.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
           : `<option value="">此球隊目前無登錄球員</option>`;
       }
     }
 
-    // 🌟 動態從遠端載入賽事清單 (格式改為 [日期  時間] vs 對手隊名，不顯示自己隊名)
     async function loadRemoteScheduleOptions() {
       const selectEl = document.getElementById('attGameSelect');
-      selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
+      const filterSelect = document.getElementById('filterAttendanceGameSelect');
+      if (selectEl) selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
 
       const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Games');
 
@@ -720,7 +691,6 @@
         const currentTeam = globalData.teams.find(t => String(t.team_id) === String(currentSelectedTeamId));
         const teamName = currentTeam ? String(currentTeam.team_name).trim() : '';
 
-        // 計算本週週一到週日
         const now = new Date();
         const dayOfWeek = now.getDay();
         const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
@@ -753,70 +723,139 @@
           return matchDiv && matchTeam && matchDate;
         });
 
-        const targetList = filteredGames;
+        res.schedule.forEach(g => {
+          const valId = String(g.game_id || '');
+          if (!valId) return;
 
-        if (targetList.length > 0) {
+          const home = String(g.home_team || '').trim();
+          const away = String(g.away_team || '').trim();
+          let opponent = teamName ? (home === teamName ? away : (away === teamName ? home : `${home} vs ${away}`)) : `${home} vs ${away}`;
+
+          let dateStr = '';
+          if (g.date) {
+            const d = new Date(g.date);
+            if (!isNaN(d.getTime())) {
+              dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+            } else {
+              const parts = String(g.date).split('T')[0].split('-');
+              if (parts.length === 3) dateStr = `${parts[1]}/${parts[2]}`;
+              else dateStr = String(g.date).split('T')[0];
+            }
+          }
+
+          let timeStr = '';
+          if (g.time) {
+            const tStr = String(g.time);
+            if (tStr.includes('1899') || tStr.includes('1900')) {
+              const dt = new Date(g.time);
+              if (!isNaN(dt.getTime())) {
+                timeStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+              }
+            } else if (tStr.includes(' ')) {
+              const parts = tStr.split(' ');
+              timeStr = parts[parts.length - 1].substring(0, 5);
+            } else {
+              timeStr = tStr.substring(0, 5);
+            }
+          }
+
+          const dateTimeDisplay = timeStr ? `${dateStr} ${timeStr}` : dateStr;
+          globalGameCache[valId] = `[${dateTimeDisplay}] vs ${opponent}`;
+        });
+
+        const targetList = filteredGames.length > 0 ? filteredGames : res.schedule;
+        if (selectEl) {
           selectEl.innerHTML = targetList.map(g => {
             const valId = g.game_id || '';
-            const home = String(g.home_team || '').trim();
-            const away = String(g.away_team || '').trim();
-            
-            // 判斷對手隊名（如果自己是主隊，對手就是客隊；反之則為主隊）
-            let opponent = '';
-            if (teamName) {
-              if (home === teamName) {
-                opponent = away;
-              } else if (away === teamName) {
-                opponent = home;
-              } else {
-                // 萬一名稱未完全匹配，預設顯示扣掉自己或兩隊都列出
-                opponent = home === teamName ? away : (away === teamName ? home : `${home} vs ${away}`);
-              }
-            } else {
-              opponent = `${home} vs ${away}`;
-            }
-
-            // 格式化日期：MM/DD (若需要完整年份可維持 YYYY/MM/DD)
-            let dateStr = '';
-            if (g.date) {
-              const d = new Date(g.date);
-              if (!isNaN(d.getTime())) {
-                dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
-              } else {
-                const parts = String(g.date).split('T')[0].split('-');
-                if (parts.length === 3) dateStr = `${parts[1]}/${parts[2]}`;
-                else dateStr = String(g.date).split('T')[0];
-              }
-            }
-
-            // 格式化時間：HH:mm
-            let timeStr = '';
-            if (g.time) {
-              const tStr = String(g.time);
-              if (tStr.includes('1899') || tStr.includes('1900')) {
-                const dt = new Date(g.time);
-                if (!isNaN(dt.getTime())) {
-                  timeStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
-                }
-              } else if (tStr.includes(' ')) {
-                const parts = tStr.split(' ');
-                timeStr = parts[parts.length - 1].substring(0, 5);
-              } else {
-                timeStr = tStr.substring(0, 5);
-              }
-            }
-
-            const dateTimeDisplay = timeStr ? `${dateStr} ${timeStr}` : dateStr;
-            
-            // 💡 格式：[日期 時間] vs 對手
-            return `<option value="${valId}">[${dateTimeDisplay}] vs ${opponent}</option>`;
+            return `<option value="${valId}">${globalGameCache[valId] || valId}</option>`;
           }).join('');
-        } else {
-          selectEl.innerHTML = `<option value="">本週及之後目前無該球隊的賽事</option>`;
         }
 
+        if (filterSelect) {
+          let currentFilterVal = filterSelect.value;
+          let filterOptionsHtml = `<option value="ALL">-- 顯示全部賽事場次 --</option>`;
+          targetList.forEach(g => {
+            const valId = g.game_id || '';
+            filterOptionsHtml += `<option value="${valId}">${globalGameCache[valId] || valId}</option>`;
+          });
+          filterSelect.innerHTML = filterOptionsHtml;
+          filterSelect.value = currentFilterVal;
+        }
+
+        updateTeamPlayerSelects();
+        renderAttendanceTable();
+
       } else {
-        selectEl.innerHTML = `<option value="">⚠️ 無法讀取遠端賽事資料</option>`;
+        if (selectEl) selectEl.innerHTML = `<option value="">⚠️ 無法讀取遠端賽事資料</option>`;
+      }
+    }
+
+    function renderAttendanceTable() {
+      const tbody = document.getElementById('attendanceTableBody');
+      const filterSelect = document.getElementById('filterAttendanceGameSelect');
+      const selectedGameFilter = filterSelect ? filterSelect.value : 'ALL';
+
+      let list = globalData.attendance.filter(att => String(att.team_id) === String(currentSelectedTeamId));
+      if (selectedGameFilter !== 'ALL') {
+        list = list.filter(att => String(att.game_id) === String(selectedGameFilter));
+      }
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">目前選擇的場次尚無球員出勤與請假紀錄</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map(att => {
+        const pObj = globalData.roster.find(r => String(r.user_id) === String(att.user_id));
+        const displayName = pObj ? `${pObj.player_name} (#${pObj.number || '—'})` : att.user_id;
+
+        const gameDisplay = globalGameCache[String(att.game_id)] || att.game_id;
+
+        let statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">確認出席</span>';
+        if (att.status === 'leave') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">缺席請假</span>';
+        if (att.status === 'sub') statusBadge = '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">候補支援</span>';
+
+        return `
+          <tr>
+            <td class="p-3 font-black text-slate-900">${gameDisplay}</td>
+            <td class="p-3 font-bold">${displayName}</td>
+            <td class="p-3">${statusBadge}</td>
+            <td class="p-3 text-slate-600">${att.reason || '—'}</td>
+            <td class="p-3 text-right text-slate-400">${att.updated_at || '—'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function submitAttendance() {
+      const game_id = document.getElementById('attGameSelect').value;
+      const user_id = document.getElementById('attUserSelect').value;
+      const status = document.getElementById('attStatus').value;
+      const reason = document.getElementById('attReason').value;
+
+      if (!game_id) { alert('請選擇比賽場次'); return; }
+      if (!user_id) { alert('請選擇球員'); return; }
+
+      const existingAtt = globalData.attendance.find(
+        x => String(x.game_id) === String(game_id) && 
+             String(x.team_id) === String(currentSelectedTeamId) && 
+             String(x.user_id) === String(user_id)
+      );
+
+      if (existingAtt) {
+        const pObj = globalData.roster.find(r => String(r.user_id) === String(user_id));
+        const pName = pObj ? pObj.player_name : user_id;
+        const confirmUpdate = confirm(`⚠️ 檢查到防呆機制：\\n球員「${pName}」在此場次已經有過出勤回報紀錄。\\n\\n是否要直接「更新」該筆紀錄的狀態？`);
+        if (!confirmUpdate) return;
+      }
+
+      const res = await BBTApi.saveAttendance({ game_id, team_id: currentSelectedTeamId, user_id, status, reason });
+      if (res && res.result === 'ok') {
+        alert('✅ 出席與請假回報已成功寫入 Google Sheets！');
+        closeAttendanceModal();
+        initSystem();
+      } else {
+        alert('❌ 回報失敗');
       }
     }
 
@@ -966,109 +1005,12 @@
       }).join('');
     }
 
-    // 🌟 更新出賽表格與賽事過濾選單連動
-    function renderAttendanceTable() {
-      const tbody = document.getElementById('attendanceTableBody');
-      const filterSelect = document.getElementById('filterAttendanceGameSelect');
-      
-      // 1. 同步將遠端賽事填入「檢視篩選選單」（如果還沒填過的話）
-      const selectEl = document.getElementById('attGameSelect');
-      const gameMap = {};
-      if (selectEl && filterSelect) {
-        let currentFilterVal = filterSelect.value;
-        let optionsHtml = `<option value="ALL">-- 顯示全部未來賽事場次 --</option>`;
-        for (let opt of selectEl.options) {
-          if (opt.value) {
-            gameMap[opt.value] = opt.text;
-            optionsHtml += `<option value="${opt.value}">${opt.text}</option>`;
-          }
-        }
-        // 保持原本選中的狀態
-        filterSelect.innerHTML = optionsHtml;
-        filterSelect.value = currentFilterVal;
-      }
-
-      // 2. 取得目前選中的過濾場次 ID
-      const selectedGameFilter = filterSelect ? filterSelect.value : 'ALL';
-
-      // 3. 過濾出賽紀錄
-      let list = globalData.attendance.filter(att => String(att.team_id) === String(currentSelectedTeamId));
-      if (selectedGameFilter !== 'ALL') {
-        list = list.filter(att => String(att.game_id) === String(selectedGameFilter));
-      }
-
-      if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">目前選擇的場次尚無球員出勤與請假紀錄</td></tr>`;
-        return;
-      }
-
-      tbody.innerHTML = list.map(att => {
-        const pObj = globalData.roster.find(r => String(r.user_id) === String(att.user_id));
-        const displayName = pObj ? `${pObj.player_name} (#${pObj.number || '—'})` : att.user_id;
-
-        let gameDisplay = gameMap[String(att.game_id)] || att.game_id;
-
-        let statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">確認出席</span>';
-        if (att.status === 'leave') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">缺席請假</span>';
-        if (att.status === 'sub') statusBadge = '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">候補支援</span>';
-
-        return `
-          <tr>
-            <td class="p-3 font-black text-slate-900">${gameDisplay}</td>
-            <td class="p-3 font-bold">${displayName}</td>
-            <td class="p-3">${statusBadge}</td>
-            <td class="p-3 text-slate-600">${att.reason || '—'}</td>
-            <td class="p-3 text-right text-slate-400">${att.updated_at || '—'}</td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    // 🌟 帶有「同場同球員防呆機制」的送出回報函式
-    async function submitAttendance() {
-      const game_id = document.getElementById('attGameSelect').value;
-      const user_id = document.getElementById('attUserSelect').value;
-      const status = document.getElementById('attStatus').value;
-      const reason = document.getElementById('attReason').value;
-
-      if (!game_id) { alert('請選擇比賽場次'); return; }
-      if (!user_id) { alert('請選擇球員'); return; }
-
-      // 🛡️ 防呆機制：檢查該球員在同一場次是否已經有回報紀錄
-      const existingAtt = globalData.attendance.find(
-        x => String(x.game_id) === String(game_id) && 
-             String(x.team_id) === String(currentSelectedTeamId) && 
-             String(x.user_id) === String(user_id)
-      );
-
-      if (existingAtt) {
-        const pObj = globalData.roster.find(r => String(r.user_id) === String(user_id));
-        const pName = pObj ? pObj.player_name : user_id;
-        const confirmUpdate = confirm(`⚠️ 檢查到防呆機制：\n球員「${pName}」在此場次已經有過出勤回報紀錄。\n\n是否要直接「更新」該筆紀錄的狀態？`);
-        if (!confirmUpdate) return;
-        
-        // 如果使用者確認，帶入原有的 att_id 進行覆蓋更新
-        // 後端的 saveTeamAttendance 已經具備自動比對 att_id 進行 upsert 的能力
-      }
-
-      const res = await BBTApi.saveAttendance({ game_id, team_id: currentSelectedTeamId, user_id, status, reason });
-      if (res && res.result === 'ok') {
-        alert('✅ 出席與請假回報已成功寫入 Google Sheets！');
-        closeAttendanceModal();
-        initSystem();
-      } else {
-        alert('❌ 回報失敗');
-      }
-    }
-
-    // Modal 控制函式
     function openTeamProfileModal() { document.getElementById('teamProfileModal').classList.remove('hidden'); document.getElementById('teamProfileModal').classList.add('flex'); }
     function closeTeamProfileModal() { document.getElementById('teamProfileModal').classList.add('hidden'); document.getElementById('teamProfileModal').classList.remove('flex'); }
 
     async function openAttendanceModal() { 
       document.getElementById('attendanceModal').classList.remove('hidden'); 
       document.getElementById('attendanceModal').classList.add('flex'); 
-      // 🌟 開啟時自動載入遠端賽事選項
       await loadRemoteScheduleOptions();
     }
     function closeAttendanceModal() { document.getElementById('attendanceModal').classList.add('hidden'); document.getElementById('attendanceModal').classList.remove('flex'); }
@@ -1091,25 +1033,6 @@
         initSystem();
       } else {
         alert('❌ 儲存失敗');
-      }
-    }
-
-    async function submitAttendance() {
-      const game_id = document.getElementById('attGameSelect').value; // 讀取下拉選單的值
-      const user_id = document.getElementById('attUserSelect').value;
-      const status = document.getElementById('attStatus').value;
-      const reason = document.getElementById('attReason').value;
-
-      if (!game_id) { alert('請選擇比賽場次'); return; }
-      if (!user_id) { alert('請選擇球員'); return; }
-
-      const res = await BBTApi.saveAttendance({ game_id, team_id: currentSelectedTeamId, user_id, status, reason });
-      if (res && res.result === 'ok') {
-        alert('✅ 出席與請假回報已成功寫入 Google Sheets！');
-        closeAttendanceModal();
-        initSystem();
-      } else {
-        alert('❌ 回報失敗');
       }
     }
 
@@ -1191,3 +1114,8 @@
   </script>
 </body>
 </html>
+'''
+
+with open('index.html', 'w', encoding='utf-8') as f:
+    f.write(html_content)
+print("Successfully generated index.html")
