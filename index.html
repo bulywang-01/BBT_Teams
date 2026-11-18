@@ -767,7 +767,6 @@
       const attUserSelect = document.getElementById('attUserSelect');
       const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
 
-      // 🌟 如果是在修改模式中，從全域 attendance 找到該筆紀錄對應的球員並強制鎖定顯示
       if (editRecordId) {
         const attObj = globalData.attendance.find(a => String(a.att_id) === String(editRecordId));
         if (attObj) {
@@ -775,12 +774,11 @@
           const pName = pObj ? `#${pObj.number || '—'} ${pObj.player_name} (${pObj.position || '球員'})` : attObj.user_id;
           
           attUserSelect.innerHTML = `<option value="${attObj.user_id}" selected>${pName}</option>`;
-          attUserSelect.disabled = true; // 鎖定不能更改球員
+          attUserSelect.disabled = true;
           return;
         }
       }
 
-      // 🌟 一般新增模式：開放選取，並過濾掉已回報過的球員
       attUserSelect.disabled = false;
       const selectedGameId = document.getElementById('attGameSelect') ? document.getElementById('attGameSelect').value : '';
       let availablePlayers = teamRoster;
@@ -1005,7 +1003,6 @@
     async function submitAttendance() {
       const att_id = document.getElementById('attEditRecordId').value;
       const game_id = document.getElementById('attGameSelect').value;
-      // 🌟 修改模式下選單被 disabled 時，直接從 DOM 或原本的紀錄抓取 user_id
       const user_id = document.getElementById('attUserSelect').value;
       const status = document.getElementById('attStatus').value;
       const reason = document.getElementById('attReason').value;
@@ -1030,19 +1027,15 @@
       const att = globalData.attendance.find(a => String(a.att_id) === String(attId));
       if (!att) return;
 
-      // 1. 先設定好編輯的 ID
       document.getElementById('attEditRecordId').value = att.att_id;
       document.getElementById('attendanceModalTitle').innerText = "修改球員出勤與請假狀態";
       
-      // 2. 開啟彈窗
       document.getElementById('attendanceModal').classList.remove('hidden');
       document.getElementById('attendanceModal').classList.add('flex');
 
-      // 3. 載入賽程並直接帶入該筆紀錄的值
       await loadRemoteScheduleOptions();
       document.getElementById('attGameSelect').value = att.game_id;
       
-      // 4. 再次呼叫更新選單（此時帶有 attEditRecordId，會自動填入球員並上鎖）
       updateTeamPlayerSelects();
 
       document.getElementById('attStatus').value = att.status;
@@ -1250,8 +1243,12 @@
       }
 
       tbody.innerHTML = txs.map(tx => {
+        // 🌟 修正 FA 專區的球員顯示：只顯示「背號 姓名」或純姓名，不再帶出 U1024 系統編號
         const pObj = globalData.roster.find(r => String(r.user_id) === String(tx.user_id));
-        const displayName = pObj ? `${pObj.player_name} (${tx.user_id})` : tx.user_id;
+        let displayName = tx.user_id;
+        if (pObj) {
+          displayName = pObj.number ? `#${pObj.number} ${pObj.player_name}` : pObj.player_name;
+        }
 
         return `
           <tr>
