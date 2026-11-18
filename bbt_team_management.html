@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BBT 軟式棒球聯盟 - 職業級球隊與球員管理控制台</title>
+  <title>BBT 軟式棒球聯盟 - 球隊與球員管理控制台</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
@@ -28,8 +28,25 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
     body { font-family: 'Noto Sans TC', sans-serif; }
-    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    
+    /* 中職球員卡金屬光澤與漸層 */
+    .player-card-bg {
+      background: linear-gradient(135deg, #0b132b 0%, #1e293b 50%, #0f172a 100%);
+      position: relative;
+      overflow: hidden;
+    }
+    .player-card-bg::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(245,158,11,0.15) 0%, transparent 60%);
+      pointer-events: none;
+    }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
@@ -41,34 +58,29 @@
         
         <!-- 左側：BBT 專屬黑金標誌 -->
         <div class="flex items-center space-x-3">
-          <div class="bg-gradient-to-br from-emerald-500 to-teal-700 p-2.5 rounded-xl text-white shadow-md flex items-center justify-center">
+          <div class="bg-gradient-to-br from-emerald-500 to-teal-700 p-2 rounded-xl text-white shadow-md flex items-center justify-center">
             <i data-lucide="trophy" class="w-5 h-5 text-amber-300"></i>
           </div>
           <div>
             <div class="flex items-center space-x-2">
-              <span class="font-black text-lg tracking-wider text-white">BBT 棒球聯盟</span>
-              <span class="bg-emerald-500/20 text-emerald-300 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-emerald-500/30 uppercase tracking-widest">PRO ADMIN</span>
+              <span class="font-black text-base sm:text-lg tracking-wider text-white">BBT 棒球聯盟</span>
+              <span id="roleBadge" class="bg-emerald-500/20 text-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-500/30 uppercase tracking-widest">PRO ADMIN</span>
             </div>
-            <p class="text-[10px] text-slate-400 hidden sm:block">軟式棒球最高殿堂 · 後端賽務管理中心</p>
+            <p class="text-[10px] text-slate-400 hidden sm:block">軟式棒球最高殿堂 · 球隊與球員管理中心</p>
           </div>
         </div>
 
-        <!-- 中間：功能切換導航 (比照 SaaS 控制台) -->
-        <nav class="hidden md:flex items-center space-x-1 text-xs font-bold text-slate-300">
-          <a href="#" class="px-3.5 py-2 rounded-xl hover:bg-slate-800 transition">總覽 Dashboard</a>
-          <a href="#" class="px-3.5 py-2 rounded-xl hover:bg-slate-800 transition">賽程與裁判排班</a>
-          <a href="#" class="px-3.5 py-2 rounded-xl bg-emerald-600 text-white shadow-md flex items-center space-x-1.5">
-            <i data-lucide="shield-half" class="w-4 h-4"></i>
-            <span>球隊與球員</span>
-          </a>
-          <a href="#" class="px-3.5 py-2 rounded-xl hover:bg-slate-800 transition">數據報表中心</a>
-        </nav>
+        <!-- 中間：視角切換器 (Demo 展示用：切換聯盟管理員 vs 隊長登入) -->
+        <div class="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700">
+          <button onclick="switchRoleMode('admin')" id="mode-admin" class="px-3 py-1 rounded-lg text-xs font-black bg-emerald-600 text-white shadow transition">聯盟管理員視角</button>
+          <button onclick="switchRoleMode('captain')" id="mode-captain" class="px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition">隊長登入視角 (暗殺者)</button>
+        </div>
 
         <!-- 右側：管理者身分與設定 -->
         <div class="flex items-center space-x-3">
           <div class="text-right hidden sm:block">
-            <div class="text-xs font-black text-white">王韶文</div>
-            <div class="text-[10px] font-bold text-amber-400">最高賽務審核員</div>
+            <div id="userNameDisplay" class="text-xs font-black text-white">王韶文</div>
+            <div id="userTitleDisplay" class="text-[10px] font-bold text-amber-400">最高賽務審核員</div>
           </div>
           <button class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-xl transition border border-slate-700 flex items-center space-x-1">
             <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
@@ -80,17 +92,15 @@
     </div>
   </header>
 
-  <!-- 2. 主要內容區 (Main Operations) -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 flex-grow w-full">
+  <!-- 2. 主要內容區 -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5 flex-grow w-full">
 
-    <!-- 頂部動態篩選欄 (控制條) -->
-    <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-      
-      <!-- 左：賽季與分組 Selectors -->
+    <!-- 頂部動態篩選欄 (僅聯盟管理員視角顯示) -->
+    <div id="adminFilterBar" class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-center space-x-2">
           <label class="text-xs font-black text-slate-500 uppercase tracking-wider">年度賽季</label>
-          <select id="seasonSelect" class="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl px-3 py-2 focus:outline-none focus:border-emerald-500 shadow-inner">
+          <select id="seasonSelect" class="bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500">
             <option value="2026-S18">2026 第 18 季 (現行賽季)</option>
             <option value="2025-S17">2025 第 17 季</option>
           </select>
@@ -100,285 +110,701 @@
 
         <!-- 聯盟分組 Pills -->
         <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
-          <button onclick="switchDiv('大聯盟')" id="btn-maj" class="px-4 py-1.5 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition">大聯盟組</button>
-          <button onclick="switchDiv('小聯盟')" id="btn-min" class="px-4 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">小聯盟組</button>
-          <button onclick="switchDiv('育成組')" id="btn-rok" class="px-4 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">育成組</button>
+          <button onclick="switchDiv('大聯盟')" id="btn-maj" class="px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition">大聯盟組</button>
+          <button onclick="switchDiv('小聯盟')" id="btn-min" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">小聯盟組</button>
+          <button onclick="switchDiv('育成組')" id="btn-rok" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">育成組</button>
         </div>
       </div>
 
-      <!-- 右：動作按鈕 -->
       <div class="flex items-center space-x-2">
-        <button onclick="openAddTeamModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow transition flex items-center space-x-1.5">
+        <a href="https://bbtls.com/fa.php" target="_blank" class="bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 border border-amber-300 font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5">
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          <span>開啟 BBT 自由球員市場 (FA)</span>
+        </a>
+        <button onclick="alert('開啟新增參賽球隊審核模組')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow transition flex items-center space-x-1.5">
           <i data-lucide="plus-circle" class="w-4 h-4"></i>
-          <span>新增參賽球隊</span>
+          <span>新增球隊</span>
         </button>
       </div>
-
     </div>
 
-    <!-- 雙欄佈局 (Left Team Hub + Right Roster Dashboard) -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- 主體網格佈局 -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
-      <!-- 左欄：球隊選擇與概觀 (4 / 12) -->
-      <div class="lg:col-span-4 space-y-4">
-        
+      <!-- 左欄：球隊列表控制中心 (管理員顯示；隊長登入時自動隱藏，讓右側全寬展開) -->
+      <div id="leftTeamSidebar" class="lg:col-span-4 space-y-4">
         <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
           <div class="flex items-center justify-between border-b border-slate-100 pb-2">
             <h2 class="font-black text-slate-900 text-sm flex items-center space-x-2">
               <i data-lucide="shield" class="w-4 h-4 text-emerald-600"></i>
-              <span>球隊控制中心</span>
+              <span>聯盟球隊清單</span>
             </h2>
-            <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-2 py-0.5 rounded-full">大聯盟組 · 8 隊</span>
+            <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black px-2 py-0.5 rounded-full">大聯盟組 · 4 隊</span>
           </div>
 
-          <!-- 搜尋框 -->
           <div class="relative">
             <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
             <input type="text" placeholder="搜尋球隊名稱或教練..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-500">
           </div>
 
-          <!-- 球隊清單卡片 -->
-          <div class="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar pr-1">
-            
-            <!-- 選中卡片：暗殺者 -->
-            <div onclick="selectTeam('暗殺者', '王奕程', '八里國中 / 瓊林C', '37')" id="card-暗殺者" class="p-3.5 bg-slate-900 text-white border-2 border-emerald-500 rounded-xl cursor-pointer shadow-md transition flex items-center justify-between">
+          <div class="space-y-2 max-h-[540px] overflow-y-auto custom-scrollbar pr-1">
+            <!-- 暗殺者 -->
+            <div onclick="selectTeam('暗殺者', '王奕程', '陳澤宇 (0912-345-678)', '37', '新北軟棒傳統勁旅，強調速度戰與嚴密內野守備，連續三季打進季後賽並奪得第17季總冠軍。')" id="card-暗殺者" class="team-card p-3 bg-slate-900 text-white border-2 border-emerald-500 rounded-xl cursor-pointer shadow-md transition flex items-center justify-between">
               <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center text-xs shadow">
-                  暗殺
-                </div>
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center text-xs shadow">暗殺</div>
                 <div>
                   <div class="font-black text-sm text-white flex items-center gap-1.5">
                     <span>暗殺者</span>
-                    <span class="bg-emerald-500 text-slate-900 text-[9px] font-black px-1.5 py-0.2 rounded">現役</span>
+                    <span class="bg-emerald-500 text-slate-900 text-[9px] font-black px-1.5 py-0.2 rounded">衛冕軍</span>
                   </div>
-                  <div class="text-[11px] text-slate-400">總教練：王奕程 · 名單 37 人</div>
+                  <div class="text-[11px] text-slate-400">教練：王奕程 · 現役 37 人</div>
                 </div>
               </div>
               <i data-lucide="chevron-right" class="w-4 h-4 text-emerald-400"></i>
             </div>
 
-            <!-- 未選中卡片：實踐夢想家 -->
-            <div onclick="selectTeam('實踐夢想家', '林家豪', '土城綜合球場', '28')" id="card-實踐夢想家" class="p-3.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer transition flex items-center justify-between">
+            <!-- 實踐夢想家 -->
+            <div onclick="selectTeam('實踐夢想家', '林家豪', '林家豪 (0922-888-999)', '28', '以年輕上班族為班底的熱血球隊，打擊火力兇猛，團隊氣氛極佳。')" id="card-實踐夢想家" class="team-card p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer transition flex items-center justify-between">
               <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 font-black flex items-center justify-center text-xs border border-slate-200">
-                  夢想
-                </div>
+                <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 font-black flex items-center justify-center text-xs border border-slate-200">夢想</div>
                 <div>
                   <div class="font-black text-sm text-slate-900">實踐夢想家</div>
-                  <div class="text-[11px] text-slate-500">總教練：林家豪 · 名單 28 人</div>
+                  <div class="text-[11px] text-slate-500">教練：林家豪 · 現役 28 人</div>
                 </div>
               </div>
               <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i>
             </div>
 
-            <!-- 未選中卡片：新北暴龍 -->
-            <div onclick="selectTeam('新北暴龍', '張世明', '新莊瓊林 C', '31')" id="card-新北暴龍" class="p-3.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer transition flex items-center justify-between">
+            <!-- 新北暴龍 -->
+            <div onclick="selectTeam('新北暴龍', '張世明', '張世明 (0933-111-222)', '31', '投手戰力堅強，擁有聯盟頂尖防禦率，球風強悍。')" id="card-新北暴龍" class="team-card p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer transition flex items-center justify-between">
               <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 font-black flex items-center justify-center text-xs border border-slate-200">
-                  暴龍
-                </div>
+                <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 font-black flex items-center justify-center text-xs border border-slate-200">暴龍</div>
                 <div>
                   <div class="font-black text-sm text-slate-900">新北暴龍</div>
-                  <div class="text-[11px] text-slate-500">總教練：張世明 · 名單 31 人</div>
+                  <div class="text-[11px] text-slate-500">教練：張世明 · 現役 31 人</div>
                 </div>
               </div>
               <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i>
             </div>
-
-            <!-- 未選中卡片：PTTPE -->
-            <div onclick="selectTeam('PTTPE', '周政宏', '八里挖仔尾球場', '25')" id="card-PTTPE" class="p-3.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl cursor-pointer transition flex items-center justify-between">
-              <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 font-black flex items-center justify-center text-xs border border-slate-200">
-                  PTT
-                </div>
-                <div>
-                  <div class="font-black text-sm text-slate-900">PTTPE</div>
-                  <div class="text-[11px] text-slate-500">總教練：周政宏 · 名單 25 人</div>
-                </div>
-              </div>
-              <i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i>
-            </div>
-
           </div>
-
         </div>
-
       </div>
 
-      <!-- 右欄：球隊檔案與球員數據名單 (8 / 12) -->
-      <div class="lg:col-span-8 space-y-6">
+      <!-- 右欄：球隊核心工作台 (8/12 或 隊長模式全寬 12/12) -->
+      <div id="rightMainWorkspace" class="lg:col-span-8 space-y-5">
 
-        <!-- 1. 球隊資料 Banner 卡片 -->
+        <!-- 1. 球隊資料與視覺識別 Banner -->
         <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div class="flex items-center space-x-4">
-              <div class="w-14 h-14 rounded-2xl bg-bbt-navy text-white font-black text-lg flex items-center justify-center shadow-md border-2 border-emerald-500">
+              <!-- Logo -->
+              <div class="w-14 h-14 rounded-2xl bg-bbt-navy text-white font-black text-lg flex items-center justify-center shadow-md border-2 border-emerald-500 shrink-0">
                 <span id="teamLogoText">暗殺</span>
               </div>
               <div>
-                <div class="flex items-center space-x-2">
+                <div class="flex flex-wrap items-center gap-2">
                   <h2 id="teamTitle" class="text-xl font-black text-slate-900">暗殺者</h2>
-                  <span class="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-200">衛冕冠軍</span>
+                  <span class="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-200">大聯盟組</span>
+                  <span class="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">BBT-T001</span>
                 </div>
-                <p class="text-xs text-slate-400 font-semibold mt-0.5">BBT 聯賽編號：BBT-T001 · 註冊時間：2026/01/10</p>
+                <p id="teamIntroText" class="text-xs text-slate-500 mt-1 line-clamp-2">新北軟棒傳統勁旅，強調速度戰與嚴密內野守備，連續三季打進季後賽並奪得第17季總冠軍。</p>
               </div>
             </div>
 
-            <div class="flex items-center space-x-2">
-              <button class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3.5 py-2 rounded-xl transition border border-slate-200 flex items-center space-x-1">
-                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
-                <span>編輯資料</span>
+            <div class="flex items-center space-x-2 shrink-0">
+              <button onclick="openTeamProfileModal()" class="bg-bbt-navy hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
+                <i data-lucide="image" class="w-3.5 h-3.5 text-amber-400"></i>
+                <span>隊服與介紹維護</span>
               </button>
             </div>
           </div>
 
-          <!-- 關鍵數據 Summary Grid -->
+          <!-- 關鍵資訊卡 -->
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <span class="text-[11px] font-bold text-slate-400 block">總教練</span>
-              <span id="coachText" class="font-black text-slate-900 text-sm">王奕程</span>
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+              <span class="text-[11px] font-bold text-slate-400 block">總教練 / 經理</span>
+              <span id="coachText" class="font-black text-slate-900 text-xs">王奕程 / 林小美</span>
             </div>
-            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <span class="text-[11px] font-bold text-slate-400 block">球隊登錄人數</span>
-              <span id="rosterCountText" class="font-black text-emerald-600 text-sm">37 人 (額滿)</span>
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+              <span class="text-[11px] font-bold text-slate-400 block">隊長聯絡窗口</span>
+              <span id="contactText" class="font-black text-slate-900 text-xs">陳澤宇 (0912-345-678)</span>
             </div>
-            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <span class="text-[11px] font-bold text-slate-400 block">主要戰場</span>
-              <span id="stadiumText" class="font-black text-slate-900 text-sm truncate">八里國中 / 瓊林C</span>
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+              <span class="text-[11px] font-bold text-slate-400 block">球隊登錄編制</span>
+              <span id="rosterCountText" class="font-black text-emerald-600 text-xs">現役 37 人 · 教練 2 · 經理 1</span>
             </div>
-            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
               <span class="text-[11px] font-bold text-slate-400 block">本季戰績</span>
-              <span class="font-black text-amber-600 text-sm">8 勝 - 2 敗 (勝率 .800)</span>
+              <span class="font-black text-amber-600 text-xs">8 勝 - 2 敗 (.800)</span>
             </div>
           </div>
         </div>
 
-        <!-- 2. 球員名單專業數據 Table -->
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-5 space-y-4">
+        <!-- 2. 多功能模組切換導航 Tabs -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           
-          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-            <div>
-              <h3 class="font-black text-slate-900 text-base">登錄球員名單</h3>
-              <p class="text-xs text-slate-400">可對球員進行資格審核、背號異動與轉隊處置</p>
+          <!-- Tab 按鈕列 -->
+          <div class="flex border-b border-slate-200 bg-slate-50/70 overflow-x-auto custom-scrollbar">
+            <button onclick="switchTab('roster')" id="tab-roster" class="tab-btn px-5 py-3.5 text-xs font-black border-b-2 border-emerald-600 text-emerald-700 bg-white flex items-center space-x-1.5 whitespace-nowrap">
+              <i data-lucide="users" class="w-4 h-4"></i>
+              <span>球員名單與編制</span>
+            </button>
+            <button onclick="switchTab('attendance')" id="tab-attendance" class="tab-btn px-5 py-3.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-1.5 whitespace-nowrap">
+              <i data-lucide="calendar-check" class="w-4 h-4"></i>
+              <span>出賽管理 (點名/請假/候補)</span>
+            </button>
+            <button onclick="switchTab('announcements')" id="tab-announcements" class="tab-btn px-5 py-3.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-1.5 whitespace-nowrap">
+              <i data-lucide="megaphone" class="w-4 h-4"></i>
+              <span>球隊公告 (練球/聚餐/賽程)</span>
+            </button>
+            <button onclick="switchTab('transactions')" id="tab-transactions" class="tab-btn px-5 py-3.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-1.5 whitespace-nowrap">
+              <i data-lucide="arrow-left-right" class="w-4 h-4"></i>
+              <span>球員異動 & FA 專區</span>
+            </button>
+          </div>
+
+          <!-- ================= TAB 1: 球員名單與編制 ================= -->
+          <div id="panel-roster" class="tab-panel p-5 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <!-- 編制子篩選 -->
+              <div class="flex items-center space-x-1.5">
+                <button onclick="filterRosterRole('all')" class="px-3 py-1 rounded-lg text-xs font-black bg-slate-800 text-white">全部編制 (40)</button>
+                <button onclick="filterRosterRole('player')" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">現役球員 (37)</button>
+                <button onclick="filterRosterRole('coach')" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">教練團 (2)</button>
+                <button onclick="filterRosterRole('manager')" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">球團經理 (1)</button>
+              </div>
+
+              <div class="flex items-center space-x-2">
+                <span class="text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg font-bold border border-emerald-200">💡 點擊球員姓名查看「中職風格球員卡」</span>
+                <button onclick="alert('開啟新增球員/教練/經理視窗')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow transition flex items-center space-x-1">
+                  <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                  <span>新增人員</span>
+                </button>
+              </div>
             </div>
 
-            <div class="flex items-center space-x-2">
-              <button onclick="alert('開啟 CSV 匯入視窗')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl transition border border-slate-200 flex items-center space-x-1">
-                <i data-lucide="file-up" class="w-3.5 h-3.5"></i>
-                <span>匯入 Excel 名單</span>
-              </button>
-              <button onclick="openAddPlayerModal()" class="bg-bbt-navy hover:bg-slate-800 text-white font-black text-xs px-3.5 py-2 rounded-xl shadow transition flex items-center space-x-1">
-                <i data-lucide="user-plus" class="w-3.5 h-3.5 text-emerald-400"></i>
-                <span>+ 新增登錄球員</span>
-              </button>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                  <tr>
+                    <th class="p-3">背號</th>
+                    <th class="p-3">姓名 (點擊看球員卡)</th>
+                    <th class="p-3">編制身分</th>
+                    <th class="p-3">守備位置</th>
+                    <th class="p-3">投打習慣</th>
+                    <th class="p-3 text-right">本季打擊率 / 防禦率</th>
+                    <th class="p-3 text-center">狀態</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 font-semibold text-slate-700" id="rosterTableBody">
+                  <!-- 由 JS 動態渲染 -->
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <!-- 高質感 Table -->
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs">
-              <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
-                <tr>
-                  <th class="p-3">背號</th>
-                  <th class="p-3">球員姓名</th>
-                  <th class="p-3">主要守位</th>
-                  <th class="p-3">投打習慣</th>
-                  <th class="p-3">隊內身分</th>
-                  <th class="p-3">資格狀態</th>
-                  <th class="p-3 text-right">出賽場次</th>
-                  <th class="p-3 text-right">操作</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100 font-semibold text-slate-700">
-                
-                <tr class="hover:bg-slate-50 transition">
-                  <td class="p-3 font-black text-slate-900">#3</td>
-                  <td class="p-3 font-bold text-slate-900">沈進男</td>
-                  <td class="p-3">右外野手</td>
-                  <td class="p-3"><span class="text-slate-500">左投 / 左打</span></td>
-                  <td class="p-3"><span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold">一般球員</span></td>
-                  <td class="p-3"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full text-[10px]">通過審核</span></td>
-                  <td class="p-3 text-right font-black text-slate-900">12</td>
-                  <td class="p-3 text-right">
-                    <button class="text-slate-400 hover:text-bbt-navy p-1"><i data-lucide="more-horizontal" class="w-4 h-4"></i></button>
-                  </td>
-                </tr>
+          <!-- ================= TAB 2: 出賽管理 (出席回報/請假/候補) ================= -->
+          <div id="panel-attendance" class="tab-panel hidden p-5 space-y-4">
+            <div class="bg-slate-900 text-white rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div class="flex items-center space-x-2">
+                  <span class="bg-emerald-500 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded uppercase">下場賽程點名中</span>
+                  <span class="text-xs text-slate-300 font-bold">2026/11/22 (日) 09:00 · 新莊瓊林 C 球場</span>
+                </div>
+                <h4 class="text-base font-black mt-1">VS 實踐夢想家 (第 18 季例行賽 G42)</h4>
+              </div>
+              <div class="flex items-center space-x-3 text-center">
+                <div class="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                  <div class="text-[10px] text-slate-400">確認出席</div>
+                  <div class="text-base font-black text-emerald-400">14 人</div>
+                </div>
+                <div class="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                  <div class="text-[10px] text-slate-400">缺席請假</div>
+                  <div class="text-base font-black text-rose-400">3 人</div>
+                </div>
+                <div class="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                  <div class="text-[10px] text-slate-400">候補支援</div>
+                  <div class="text-base font-black text-amber-400">2 人</div>
+                </div>
+              </div>
+            </div>
 
-                <tr class="hover:bg-slate-50 transition">
-                  <td class="p-3 font-black text-slate-900">#4</td>
-                  <td class="p-3 font-bold text-slate-900">林哲旭</td>
-                  <td class="p-3">一壘手</td>
-                  <td class="p-3"><span class="text-slate-500">右投 / 右打</span></td>
-                  <td class="p-3"><span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold">一般球員</span></td>
-                  <td class="p-3"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full text-[10px]">通過審核</span></td>
-                  <td class="p-3 text-right font-black text-slate-900">10</td>
-                  <td class="p-3 text-right">
-                    <button class="text-slate-400 hover:text-bbt-navy p-1"><i data-lucide="more-horizontal" class="w-4 h-4"></i></button>
-                  </td>
-                </tr>
+            <!-- 出席名單與請假審核 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- 出席與候補 -->
+              <div class="border border-slate-200 rounded-xl p-3.5 space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <h5 class="font-black text-xs text-slate-800 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span> 出席球員 & 候補登錄
+                  </h5>
+                  <button onclick="alert('開啟候補球員登錄視窗')" class="text-[11px] font-bold text-emerald-600 hover:underline">+ 指派候補球員</button>
+                </div>
+                <div class="flex flex-wrap gap-1.5 text-xs">
+                  <span class="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg font-bold">#3 沈進男</span>
+                  <span class="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg font-bold">#4 林哲旭</span>
+                  <span class="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg font-bold">#10 王奕程</span>
+                  <span class="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg font-bold">#24 陳澤宇</span>
+                  <span class="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg font-bold">#88 吳宗憲 (候補)</span>
+                </div>
+              </div>
 
-                <tr class="hover:bg-slate-50 transition">
-                  <td class="p-3 font-black text-slate-900">#10</td>
-                  <td class="p-3 font-bold text-slate-900">王奕程</td>
-                  <td class="p-3">投手 / 遊擊</td>
-                  <td class="p-3"><span class="text-slate-500">右投 / 右打</span></td>
-                  <td class="p-3"><span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">總教練兼球員</span></td>
-                  <td class="p-3"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full text-[10px]">通過審核</span></td>
-                  <td class="p-3 text-right font-black text-slate-900">14</td>
-                  <td class="p-3 text-right">
-                    <button class="text-slate-400 hover:text-bbt-navy p-1"><i data-lucide="more-horizontal" class="w-4 h-4"></i></button>
-                  </td>
-                </tr>
+              <!-- 缺席請假回報 -->
+              <div class="border border-slate-200 rounded-xl p-3.5 space-y-2.5">
+                <h5 class="font-black text-xs text-slate-800 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-rose-500"></span> 缺席請假紀錄
+                </h5>
+                <div class="space-y-2 text-xs">
+                  <div class="flex items-center justify-between bg-rose-50/60 p-2 rounded-lg border border-rose-100">
+                    <div>
+                      <span class="font-black text-slate-900">#18 張志豪</span>
+                      <span class="text-slate-500 ml-2">事由：公司臨時加班</span>
+                    </div>
+                    <span class="text-[10px] font-bold text-rose-600 bg-white px-2 py-0.5 rounded border border-rose-200">已核准請假</span>
+                  </div>
+                  <div class="flex items-center justify-between bg-rose-50/60 p-2 rounded-lg border border-rose-100">
+                    <div>
+                      <span class="font-black text-slate-900">#51 黃柏融</span>
+                      <span class="text-slate-500 ml-2">事由：家庭旅遊</span>
+                    </div>
+                    <span class="text-[10px] font-bold text-rose-600 bg-white px-2 py-0.5 rounded border border-rose-200">已核准請假</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-                <tr class="hover:bg-slate-50 transition">
-                  <td class="p-3 font-black text-slate-900">#24</td>
-                  <td class="p-3 font-bold text-slate-900">陳澤宇</td>
-                  <td class="p-3">捕手</td>
-                  <td class="p-3"><span class="text-slate-500">右投 / 右打</span></td>
-                  <td class="p-3"><span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">隊長</span></td>
-                  <td class="p-3"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full text-[10px]">通過審核</span></td>
-                  <td class="p-3 text-right font-black text-slate-900">11</td>
-                  <td class="p-3 text-right">
-                    <button class="text-slate-400 hover:text-bbt-navy p-1"><i data-lucide="more-horizontal" class="w-4 h-4"></i></button>
-                  </td>
-                </tr>
+          <!-- ================= TAB 3: 球隊公告 (練球/聚餐/賽程) ================= -->
+          <div id="panel-announcements" class="tab-panel hidden p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <div class="flex space-x-1.5">
+                <span class="bg-slate-800 text-white text-xs font-bold px-3 py-1 rounded-lg">全部公告</span>
+                <span class="bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold px-3 py-1 rounded-lg">⚾ 練球通知</span>
+                <span class="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold px-3 py-1 rounded-lg">🍻 聚餐通知</span>
+                <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold px-3 py-1 rounded-lg">📅 賽程通知</span>
+              </div>
+              <button onclick="alert('開啟發布球隊公告視窗 (可選練球/聚餐/賽程)')" class="bg-bbt-navy hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow flex items-center space-x-1">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>發布隊內公告</span>
+              </button>
+            </div>
 
-              </tbody>
-            </table>
+            <div class="space-y-2.5">
+              <!-- 賽程通知 -->
+              <div class="p-3.5 rounded-xl border border-slate-200 hover:border-emerald-400 transition bg-white flex items-start justify-between gap-3">
+                <div class="space-y-1">
+                  <div class="flex items-center space-x-2">
+                    <span class="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded">📅 賽程通知</span>
+                    <span class="font-black text-sm text-slate-900">本週日 (11/22) 08:15 瓊林 C 球場集合熱身</span>
+                  </div>
+                  <p class="text-xs text-slate-600">請全體先發與候補人員穿著「深藍主場戰袍」，務必準時到場進行守備與打擊熱身，未請假遲到者依隊規處理。</p>
+                </div>
+                <span class="text-[11px] text-slate-400 whitespace-nowrap">2026/11/18 發布</span>
+              </div>
+
+              <!-- 練球通知 -->
+              <div class="p-3.5 rounded-xl border border-slate-200 hover:border-blue-400 transition bg-white flex items-start justify-between gap-3">
+                <div class="space-y-1">
+                  <div class="flex items-center space-x-2">
+                    <span class="bg-blue-100 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded">⚾ 練球通知</span>
+                    <span class="font-black text-sm text-slate-900">週三夜間打擊籠特訓 (大魯閣新莊館)</span>
+                  </div>
+                  <p class="text-xs text-slate-600">針對上週得點圈打擊率偏低進行強化，教練團會到場協助調整揮棒軌跡，自由參加。</p>
+                </div>
+                <span class="text-[11px] text-slate-400 whitespace-nowrap">2026/11/15 發布</span>
+              </div>
+
+              <!-- 聚餐通知 -->
+              <div class="p-3.5 rounded-xl border border-slate-200 hover:border-amber-400 transition bg-white flex items-start justify-between gap-3">
+                <div class="space-y-1">
+                  <div class="flex items-center space-x-2">
+                    <span class="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded">🍻 聚餐通知</span>
+                    <span class="font-black text-sm text-slate-900">第 18 季季中慶功暨新進隊員迎新聚餐</span>
+                  </div>
+                  <p class="text-xs text-slate-600">地點：新莊熱炒旗艦店，歡迎攜眷參加，請在群組或出賽系統統計人數。</p>
+                </div>
+                <span class="text-[11px] text-slate-400 whitespace-nowrap">2026/11/10 發布</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================= TAB 4: 球員異動 & FA 整合 ================= -->
+          <div id="panel-transactions" class="tab-panel hidden p-5 space-y-4">
+            <!-- FA 整合橫幅 -->
+            <div class="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div class="flex items-start space-x-3">
+                <div class="bg-amber-500 text-white p-2 rounded-xl shrink-0 mt-0.5">
+                  <i data-lucide="award" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <h4 class="font-black text-sm text-amber-950">BBT 自由球員 (FA) 宣告與轉隊整合系統</h4>
+                  <p class="text-xs text-amber-800 mt-0.5">符合聯盟年資與出賽門檻之球員可提出 FA 申請；球隊亦可於此發起球員加盟、退隊與跨隊交易申請。</p>
+                </div>
+              </div>
+              <div class="flex items-center space-x-2 shrink-0">
+                <a href="https://bbtls.com/fa.php" target="_blank" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-black px-3.5 py-2 rounded-xl shadow transition flex items-center space-x-1">
+                  <span>前往 BBT FA 專區</span>
+                  <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+                </a>
+                <button onclick="alert('開啟球員異動申請單 (加盟 / 退隊 / 交易 / FA申請)')" class="bg-bbt-navy hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition">
+                  + 提出異動申請
+                </button>
+              </div>
+            </div>
+
+            <!-- 異動紀錄表 -->
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                  <tr>
+                    <th class="p-3">申請日期</th>
+                    <th class="p-3">異動類型</th>
+                    <th class="p-3">球員姓名</th>
+                    <th class="p-3">異動內容說明</th>
+                    <th class="p-3 text-right">聯盟審核狀態</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 font-semibold text-slate-700">
+                  <tr>
+                    <td class="p-3 text-slate-500">2026/11/12</td>
+                    <td class="p-3"><span class="bg-purple-100 text-purple-800 font-black px-2 py-0.5 rounded">FA 申請</span></td>
+                    <td class="p-3 font-black text-slate-900">陳冠宇</td>
+                    <td class="p-3">符合滿兩季出賽 70% 條件，正式宣告行使自由球員權利</td>
+                    <td class="p-3 text-right"><span class="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">FA 市場開放中</span></td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 text-slate-500">2026/10/28</td>
+                    <td class="p-3"><span class="bg-blue-100 text-blue-800 font-black px-2 py-0.5 rounded">跨隊交易</span></td>
+                    <td class="p-3 font-black text-slate-900">李宗賢 ⇄ 鄭凱文</td>
+                    <td class="p-3">暗殺者與新北暴龍達成一對一球員交易協議</td>
+                    <td class="p-3 text-right"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">聯盟已核准生效</span></td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 text-slate-500">2026/09/15</td>
+                    <td class="p-3"><span class="bg-emerald-100 text-emerald-800 font-black px-2 py-0.5 rounded">新秀加盟</span></td>
+                    <td class="p-3 font-black text-slate-900">吳宗憲 (#88)</td>
+                    <td class="p-3">完成體檢與聯盟註冊登錄，正式加盟暗殺者</td>
+                    <td class="p-3 text-right"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">已完成登錄</span></td>
+                  </tr>
+                  <tr>
+                    <td class="p-3 text-slate-500">2026/08/02</td>
+                    <td class="p-3"><span class="bg-slate-200 text-slate-700 font-black px-2 py-0.5 rounded">離隊退隊</span></td>
+                    <td class="p-3 font-black text-slate-900">周思齊</td>
+                    <td class="p-3">因個人工作調動前往南部，申請註銷本季登錄</td>
+                    <td class="p-3 text-right"><span class="bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full">已註銷名單</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
         </div>
 
       </div>
-
     </div>
-
   </main>
+
+  <!-- ================= MODAL 1: 中職風格 3D 質感球員卡 ================= -->
+  <div id="playerCardModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-700 animate-fade-in">
+      
+      <!-- 球員卡上半部：中職視覺卡面 -->
+      <div class="player-card-bg p-6 text-white">
+        <div class="flex justify-between items-start">
+          <div>
+            <span class="bg-amber-500 text-slate-950 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-widest">BBT ALL-STAR CARD</span>
+            <div class="mt-2 flex items-baseline space-x-2">
+              <span id="cardNumber" class="text-4xl font-black text-amber-400 italic">#24</span>
+              <h3 id="cardName" class="text-2xl font-black tracking-wide">陳澤宇</h3>
+            </div>
+            <p id="cardMeta" class="text-xs text-slate-300 font-bold mt-1">暗殺者 · 捕手 (C) · 右投右打</p>
+          </div>
+          <button onclick="closePlayerCard()" class="bg-white/10 hover:bg-white/20 p-1.5 rounded-full text-white transition">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- 球員照片與得獎勳章 -->
+        <div class="mt-5 flex items-center space-x-4">
+          <div class="w-24 h-28 rounded-2xl bg-gradient-to-b from-slate-700 to-slate-800 border-2 border-amber-400/70 flex flex-col items-center justify-center shadow-inner shrink-0 relative overflow-hidden">
+            <i data-lucide="user" class="w-12 h-12 text-slate-400"></i>
+            <span class="text-[9px] text-amber-300 font-black mt-1">球員形象照</span>
+          </div>
+          <div class="space-y-2 flex-grow">
+            <div class="text-[11px] font-black text-amber-400 uppercase tracking-wider flex items-center gap-1">
+              <i data-lucide="trophy" class="w-3.5 h-3.5"></i> 生涯榮譽與得獎紀錄
+            </div>
+            <div id="cardAwards" class="flex flex-wrap gap-1.5">
+              <span class="bg-amber-500/20 border border-amber-400/40 text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded">🏆 第17季 最佳十人捕手</span>
+              <span class="bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded">🥇 第16季 金手套獎</span>
+              <span class="bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[10px] font-bold px-2 py-0.5 rounded">⭐ 3次 單場MVP</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 球員卡下半部：本季 vs 生涯 數據切換 -->
+      <div class="p-5 bg-white space-y-4">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-black text-slate-800">個人成績數據面板</span>
+          <div class="bg-slate-100 p-1 rounded-xl flex text-xs font-bold">
+            <button onclick="toggleCardStats('season')" id="btn-stat-season" class="px-3 py-1 rounded-lg bg-bbt-navy text-white shadow">本季數據 (2026)</button>
+            <button onclick="toggleCardStats('career')" id="btn-stat-career" class="px-3 py-1 rounded-lg text-slate-600">生涯累計</button>
+          </div>
+        </div>
+
+        <!-- 打擊數據 -->
+        <div>
+          <div class="text-[11px] font-black text-slate-400 mb-1.5">⚾ 打擊成績 (BATTING)</div>
+          <div class="grid grid-cols-4 gap-2 text-center">
+            <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
+              <div class="text-[10px] text-slate-400 font-bold">打擊率 AVG</div>
+              <div id="stat-avg" class="text-base font-black text-bbt-navy">.385</div>
+            </div>
+            <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
+              <div class="text-[10px] text-slate-400 font-bold">全壘打 HR</div>
+              <div id="stat-hr" class="text-base font-black text-rose-600">3</div>
+            </div>
+            <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
+              <div class="text-[10px] text-slate-400 font-bold">打點 RBI</div>
+              <div id="stat-rbi" class="text-base font-black text-slate-800">14</div>
+            </div>
+            <div class="bg-slate-50 p-2 rounded-xl border border-slate-100">
+              <div class="text-[10px] text-slate-400 font-bold">OPS</div>
+              <div id="stat-ops" class="text-base font-black text-emerald-600">1.042</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 投球 & 守備數據 -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <div class="text-[11px] font-black text-slate-400 mb-1.5">🔥 投球成績 (PITCHING)</div>
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex justify-between text-xs">
+              <div><span class="text-slate-400 block text-[10px]">防禦率 ERA</span><strong id="stat-era" class="text-slate-900 font-black">2.10</strong></div>
+              <div><span class="text-slate-400 block text-[10px]">勝-敗</span><strong id="stat-wl" class="text-slate-900 font-black">2W - 0L</strong></div>
+              <div><span class="text-slate-400 block text-[10px]">三振 SO</span><strong id="stat-so" class="text-slate-900 font-black">15</strong></div>
+            </div>
+          </div>
+          <div>
+            <div class="text-[11px] font-black text-slate-400 mb-1.5">🧤 守備成績 (FIELDING)</div>
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex justify-between text-xs">
+              <div><span class="text-slate-400 block text-[10px]">守備率 FPCT</span><strong id="stat-fpct" class="text-emerald-600 font-black">.988</strong></div>
+              <div><span class="text-slate-400 block text-[10px]">失誤 E</span><strong id="stat-err" class="text-slate-900 font-black">1</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-2 flex justify-between items-center border-t border-slate-100">
+          <a href="https://bbtls.com/fa.php" target="_blank" class="text-xs font-bold text-amber-600 hover:underline flex items-center gap-1">
+            <i data-lucide="file-check" class="w-3.5 h-3.5"></i> 查詢該球員 FA 資格狀態
+          </a>
+          <button onclick="closePlayerCard()" class="bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-xl">關閉球員卡</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 2: 球隊 Logo / 隊服照片 / 介紹維護 ================= -->
+  <div id="teamProfileModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <h3 class="font-black text-base text-slate-900">球隊資料與視覺識別維護 (隊長權限)</h3>
+        <button onclick="closeTeamProfileModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">隊伍簡介與特色</label>
+          <textarea rows="3" class="w-full border border-slate-300 rounded-xl p-2.5 focus:outline-none focus:border-emerald-500">新北軟棒傳統勁旅，強調速度戰與嚴密內野守備，連續三季打進季後賽並奪得第17季總冠軍。</textarea>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-emerald-500 cursor-pointer">
+            <i data-lucide="shield" class="w-6 h-6 mx-auto text-slate-400 mb-1"></i>
+            <div class="font-bold text-slate-700">上傳球隊 Logo</div>
+            <div class="text-[10px] text-slate-400">建議 PNG 透明背景</div>
+          </div>
+          <div class="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-emerald-500 cursor-pointer">
+            <i data-lucide="shirt" class="w-6 h-6 mx-auto text-slate-400 mb-1"></i>
+            <div class="font-bold text-slate-700">上傳主/客場隊服照片</div>
+            <div class="text-[10px] text-slate-400">供裁判與對手辨識球衣顏色</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">主要聯絡人 (隊長)</label>
+            <input type="text" value="陳澤宇" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">聯絡電話 / LINE ID</label>
+            <input type="text" value="0912-345-678" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="closeTeamProfileModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100">取消</button>
+        <button onclick="alert('球隊資料已儲存並同步至聯盟資料庫！'); closeTeamProfileModal();" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow">儲存變更</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     lucide.createIcons();
 
-    function switchDiv(divName) {
-      document.getElementById('btn-maj').className = divName === '大聯盟' ? "px-4 py-1.5 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition" : "px-4 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition";
-      document.getElementById('btn-min').className = divName === '小聯盟' ? "px-4 py-1.5 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition" : "px-4 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition";
-      document.getElementById('btn-rok').className = divName === '育成組' ? "px-4 py-1.5 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition" : "px-4 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition";
+    // 模擬球員資料庫
+    const mockRoster = [
+      { no: '#24', name: '陳澤宇', roleType: 'player', roleLabel: '現役球員 (隊長)', pos: '捕手 (C)', bt: '右投 / 右打', statSummary: 'AVG .385 / 3 HR', status: '現役登錄', season: { avg: '.385', hr: '3', rbi: '14', ops: '1.042', era: '—', wl: '0W-0L', so: '0', fpct: '.988', err: '1' }, career: { avg: '.362', hr: '18', rbi: '89', ops: '.980', era: '3.50', wl: '1W-1L', so: '8', fpct: '.982', err: '6' } },
+      { no: '#10', name: '王奕程', roleType: 'coach', roleLabel: '總教練兼球員', pos: '投手 / 遊擊', bt: '右投 / 右打', statSummary: 'ERA 1.85 / AVG .340', status: '現役登錄', season: { avg: '.340', hr: '1', rbi: '11', ops: '.890', era: '1.85', wl: '5W-1L', so: '38', fpct: '.965', err: '2' }, career: { avg: '.335', hr: '12', rbi: '105', ops: '.875', era: '2.15', wl: '32W-9L', so: '245', fpct: '.960', err: '14' } },
+      { no: '#3', name: '沈進男', roleType: 'player', roleLabel: '現役球員', pos: '右外野手 (RF)', bt: '左投 / 左打', statSummary: 'AVG .412 / 12 盜', status: '現役登錄', season: { avg: '.412', hr: '0', rbi: '8', ops: '.950', era: '—', wl: '0W-0L', so: '0', fpct: '1.000', err: '0' }, career: { avg: '.388', hr: '4', rbi: '64', ops: '.910', era: '—', wl: '0W-0L', so: '0', fpct: '.990', err: '2' } },
+      { no: '#4', name: '林哲旭', roleType: 'player', roleLabel: '現役球員', pos: '一壘手 (1B)', bt: '右投 / 右打', statSummary: 'AVG .310 / 4 HR', status: '現役登錄', season: { avg: '.310', hr: '4', rbi: '19', ops: '.985', era: '—', wl: '0W-0L', so: '0', fpct: '.992', err: '1' }, career: { avg: '.298', hr: '25', rbi: '130', ops: '.920', era: '—', wl: '0W-0L', so: '0', fpct: '.985', err: '9' } },
+      { no: '—', name: '林小美', roleType: 'manager', roleLabel: '球團經理', pos: '行政 / 紀錄支援', bt: '—', statSummary: '隨隊出勤率 100%', status: '隊職員', season: { avg: '—', hr: '—', rbi: '—', ops: '—', era: '—', wl: '—', so: '—', fpct: '—', err: '—' }, career: { avg: '—', hr: '—', rbi: '—', ops: '—', era: '—', wl: '—', so: '—', fpct: '—', err: '—' } }
+    ];
+
+    let currentActivePlayer = mockRoster[0];
+
+    function renderRosterTable(filter = 'all') {
+      const tbody = document.getElementById('rosterTableBody');
+      const filtered = filter === 'all' ? mockRoster : mockRoster.filter(p => p.roleType === filter);
+      
+      tbody.innerHTML = filtered.map((p, idx) => {
+        let badgeColor = 'bg-slate-100 text-slate-700';
+        if (p.roleType === 'coach') badgeColor = 'bg-amber-100 text-amber-800';
+        if (p.roleType === 'manager') badgeColor = 'bg-pink-100 text-pink-800';
+        if (p.roleLabel.includes('隊長')) badgeColor = 'bg-emerald-100 text-emerald-800';
+
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-black text-slate-900">${p.no}</td>
+            <td class="p-3">
+              <button onclick="openPlayerCard('${p.name}')" class="font-black text-bbt-navy hover:text-emerald-600 underline decoration-emerald-400 decoration-2 underline-offset-4 flex items-center gap-1">
+                <span>${p.name}</span>
+                <i data-lucide="id-card" class="w-3.5 h-3.5 text-emerald-600"></i>
+              </button>
+            </td>
+            <td class="p-3"><span class="${badgeColor} px-2 py-0.5 rounded font-bold text-[11px]">${p.roleLabel}</span></td>
+            <td class="p-3">${p.pos}</td>
+            <td class="p-3 text-slate-500">${p.bt}</td>
+            <td class="p-3 text-right font-black text-slate-800">${p.statSummary}</td>
+            <td class="p-3 text-center"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2 py-0.5 rounded-full text-[10px]">${p.status}</span></td>
+          </tr>
+        `;
+      }).join('');
+      lucide.createIcons();
     }
 
-    function selectTeam(teamName, coach, stadium, count) {
+    function filterRosterRole(role) {
+      renderRosterTable(role);
+    }
+
+    // 切換視角 (管理員 vs 隊長)
+    function switchRoleMode(mode) {
+      const sidebar = document.getElementById('leftTeamSidebar');
+      const workspace = document.getElementById('rightMainWorkspace');
+      const filterBar = document.getElementById('adminFilterBar');
+
+      if (mode === 'captain') {
+        document.getElementById('mode-captain').className = "px-3 py-1 rounded-lg text-xs font-black bg-amber-500 text-slate-950 shadow transition";
+        document.getElementById('mode-admin').className = "px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition";
+        document.getElementById('roleBadge').innerText = "TEAM CAPTAIN";
+        document.getElementById('userNameDisplay').innerText = "陳澤宇 (暗殺者隊長)";
+        document.getElementById('userTitleDisplay').innerText = "球隊管理權限";
+        
+        sidebar.classList.add('hidden');
+        filterBar.classList.add('hidden');
+        workspace.classList.remove('lg:col-span-8');
+        workspace.classList.add('lg:col-span-12');
+      } else {
+        document.getElementById('mode-admin').className = "px-3 py-1 rounded-lg text-xs font-black bg-emerald-600 text-white shadow transition";
+        document.getElementById('mode-captain').className = "px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition";
+        document.getElementById('roleBadge').innerText = "PRO ADMIN";
+        document.getElementById('userNameDisplay').innerText = "王韶文";
+        document.getElementById('userTitleDisplay').innerText = "最高賽務審核員";
+
+        sidebar.classList.remove('hidden');
+        filterBar.classList.remove('hidden');
+        workspace.classList.remove('lg:col-span-12');
+        workspace.classList.add('lg:col-span-8');
+      }
+    }
+
+    // 切換主分頁 Tabs
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
+      document.getElementById('panel-' + tabId).classList.remove('hidden');
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.className = "tab-btn px-5 py-3.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-1.5 whitespace-nowrap";
+      });
+      document.getElementById('tab-' + tabId).className = "tab-btn px-5 py-3.5 text-xs font-black border-b-2 border-emerald-600 text-emerald-700 bg-white flex items-center space-x-1.5 whitespace-nowrap";
+    }
+
+    // 開啟球員卡 Modal
+    function openPlayerCard(playerName) {
+      const p = mockRoster.find(x => x.name === playerName) || mockRoster[0];
+      currentActivePlayer = p;
+
+      document.getElementById('cardNumber').innerText = p.no;
+      document.getElementById('cardName').innerText = p.name;
+      document.getElementById('cardMeta').innerText = `暗殺者 · ${p.pos} · ${p.bt}`;
+      
+      toggleCardStats('season');
+      document.getElementById('playerCardModal').classList.remove('hidden');
+      document.getElementById('playerCardModal').classList.add('flex');
+    }
+
+    function closePlayerCard() {
+      document.getElementById('playerCardModal').classList.add('hidden');
+      document.getElementById('playerCardModal').classList.remove('flex');
+    }
+
+    function toggleCardStats(type) {
+      const data = currentActivePlayer[type];
+      document.getElementById('stat-avg').innerText = data.avg;
+      document.getElementById('stat-hr').innerText = data.hr;
+      document.getElementById('stat-rbi').innerText = data.rbi;
+      document.getElementById('stat-ops').innerText = data.ops;
+      document.getElementById('stat-era').innerText = data.era;
+      document.getElementById('stat-wl').innerText = data.wl;
+      document.getElementById('stat-so').innerText = data.so;
+      document.getElementById('stat-fpct').innerText = data.fpct;
+      document.getElementById('stat-err').innerText = data.err;
+
+      if (type === 'season') {
+        document.getElementById('btn-stat-season').className = "px-3 py-1 rounded-lg bg-bbt-navy text-white shadow";
+        document.getElementById('btn-stat-career').className = "px-3 py-1 rounded-lg text-slate-600";
+      } else {
+        document.getElementById('btn-stat-career').className = "px-3 py-1 rounded-lg bg-bbt-navy text-white shadow";
+        document.getElementById('btn-stat-season').className = "px-3 py-1 rounded-lg text-slate-600";
+      }
+    }
+
+    function openTeamProfileModal() {
+      document.getElementById('teamProfileModal').classList.remove('hidden');
+      document.getElementById('teamProfileModal').classList.add('flex');
+    }
+
+    function closeTeamProfileModal() {
+      document.getElementById('teamProfileModal').classList.add('hidden');
+      document.getElementById('teamProfileModal').classList.remove('flex');
+    }
+
+    function switchDiv(divName) {
+      ['maj', 'min', 'rok'].forEach(k => {
+        document.getElementById('btn-' + k).className = "px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition";
+      });
+      const map = { '大聯盟': 'maj', '小聯盟': 'min', '育成組': 'rok' };
+      document.getElementById('btn-' + map[divName]).className = "px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition";
+    }
+
+    function selectTeam(teamName, coach, contact, count, intro) {
       document.getElementById('teamTitle').innerText = teamName;
       document.getElementById('teamLogoText').innerText = teamName.substring(0, 2);
       document.getElementById('coachText').innerText = coach;
-      document.getElementById('stadiumText').innerText = stadium;
-      document.getElementById('rosterCountText').innerText = `${count} 人`;
+      document.getElementById('contactText').innerText = contact;
+      document.getElementById('rosterCountText').innerText = `現役 ${count} 人`;
+      document.getElementById('teamIntroText').innerText = intro;
     }
 
-    function openAddPlayerModal() {
-      alert("開啟職業級登錄球員模組");
-    }
-
-    function openAddTeamModal() {
-      alert("開啟新增參賽球隊審核模組");
-    }
+    // 初始化渲染
+    renderRosterTable();
   </script>
 </body>
 </html>
