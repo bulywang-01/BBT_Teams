@@ -348,7 +348,7 @@
                 </div>
                 <div>
                   <h4 class="font-black text-sm text-amber-950">BBT 自由球員 (FA) 宣告與轉隊整合系統</h4>
-                  <p class="text-xs text-amber-800 mt-0.5">符合年資與出賽條件之球員可於此宣告 FA，一經提出後將無法收回，請確認後再執行。</p>
+                  <p class="text-xs text-amber-800 mt-0.5">符合年資與出賽條件之球員可於此宣告 FA，即時寫入 `Player_Transactions` 並連動官網 `fa.php`。</p>
                 </div>
               </div>
               <div class="flex items-center space-x-2 shrink-0">
@@ -796,11 +796,22 @@
         ? availablePlayers.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
         : `<option value="">此場次該球隊所有球員皆已完成回報</option>`;
 
+      // 🌟 FA 選擇選單：自動過濾掉已經宣告過 FA 的球員
       const faUserSelect = document.getElementById('faUserSelect');
       if (faUserSelect) {
-        faUserSelect.innerHTML = teamRoster.length > 0 
-          ? teamRoster.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
-          : `<option value="">此球隊目前無登錄球員</option>`;
+        const alreadyFaUserIds = new Set();
+        globalData.transactions
+          .filter(tx => String(tx.tx_type).includes('FA'))
+          .forEach(tx => alreadyFaUserIds.add(String(tx.user_id)));
+
+        const availableFaPlayers = teamRoster.filter(p => !alreadyFaUserIds.has(String(p.user_id)));
+
+        faUserSelect.innerHTML = availableFaPlayers.length > 0 
+          ? availableFaPlayers.map(p => {
+              const displayName = p.number ? `#${p.number} ${p.player_name}` : p.player_name;
+              return `<option value="${p.user_id}">${displayName} (${p.position || '球員'})</option>`;
+            }).join('')
+          : `<option value="">此球隊目前無可宣告 FA 之球員 (皆已宣告或無球員)</option>`;
       }
     }
 
@@ -1243,7 +1254,6 @@
       }
 
       tbody.innerHTML = txs.map(tx => {
-        // 🌟 修正 FA 專區的球員顯示：只顯示「背號 姓名」或純姓名，不再帶出 U1024 系統編號
         const pObj = globalData.roster.find(r => String(r.user_id) === String(tx.user_id));
         let displayName = tx.user_id;
         if (pObj) {
@@ -1278,7 +1288,11 @@
     function openAnnouncementModal() { document.getElementById('announcementModal').classList.remove('hidden'); document.getElementById('announcementModal').classList.add('flex'); }
     function closeAnnouncementModal() { document.getElementById('announcementModal').classList.add('hidden'); document.getElementById('announcementModal').classList.remove('flex'); }
 
-    function openFaApplyModal() { document.getElementById('faApplyModal').classList.remove('hidden'); document.getElementById('faApplyModal').classList.add('flex'); }
+    function openFaApplyModal() { 
+      updateTeamPlayerSelects(); // 🌟 打開 FA 宣告彈窗時自動重新整理下拉選單，過濾已宣告球員
+      document.getElementById('faApplyModal').classList.remove('hidden'); 
+      document.getElementById('faApplyModal').classList.add('flex'); 
+    }
     function closeFaApplyModal() { document.getElementById('faApplyModal').classList.add('hidden'); document.getElementById('faApplyModal').classList.remove('flex'); }
 
     async function saveCurrentTeamProfile() {
@@ -1332,8 +1346,11 @@
     function switchDiv(divName) {
       currentDivision = divName;
       ['maj', 'min', 'rok'].forEach(k => { document.getElementById('btn-' + k).className = "px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition"; });
-      const map = { '大聯盟': 'maj', '小聯盟': 'min', '育成組': 'rok' };
-      document.getElementById('btn-' + map[divName]).className = "px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition";
+      const map = { '大聯盟': 'maj', '小聯盟': 'minor', '育成組': 'rok' }; // note: keeping map keys exact
+      // switch logic retained
+      ['maj', 'min', 'rok'].forEach(k => { document.getElementById('btn-' + k).className = "px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition"; });
+      const activeMap = { '大聯盟': 'maj', '小聯盟': 'min', '育成組': 'rok' };
+      document.getElementById('btn-' + activeMap[divName]).className = "px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition";
       renderTeamSidebar();
       const filtered = globalData.teams.filter(t => String(t.division).trim() === currentDivision);
       if (filtered.length > 0) selectTeam(filtered[0].team_id);
