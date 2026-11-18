@@ -677,24 +677,25 @@
       document.getElementById('faUserSelect').innerHTML = optionsHtml;
     }
 
-    // 🌟 動態從遠端載入賽事清單至下拉選單
+    // 🌟 動態從遠端載入賽事清單至下拉選單 (對應 Games 分頁)
     async function loadRemoteScheduleOptions() {
       const selectEl = document.getElementById('attGameSelect');
-      selectEl.innerHTML = `<option value="">正在從遠端賽事表載入賽程...</option>`;
+      selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
 
-      const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Schedule');
+      // 💡 這裡將分頁名稱從 'Schedule' 改為 'Games'
+      const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Games');
 
       if (res && res.result === 'ok' && res.schedule && res.schedule.length > 0) {
         const currentTeam = globalData.teams.find(t => String(t.team_id) === String(currentSelectedTeamId));
         const teamName = currentTeam ? String(currentTeam.team_name).trim() : '';
 
-        // 嘗試過濾：只抓取符合組別與該球隊的賽事
+        // 依據你的 Games 欄位進行篩選 (category, home_team, away_team, date 等)
         const filteredGames = res.schedule.filter(g => {
           const gameCategory = String(g.category || g.league_type || '').trim();
           const homeTeam = String(g.home_team || '').trim();
           const awayTeam = String(g.away_team || '').trim();
 
-          // 1. 組別比對
+          // 1. 組別比對 (例如大聯盟 / 小聯盟)
           const matchDiv = !currentDivision || 
                            gameCategory.includes(currentDivision) || 
                            (currentDivision === '大聯盟' && gameCategory.toLowerCase().includes('major')) ||
@@ -706,7 +707,7 @@
           return matchDiv && matchTeam;
         });
 
-        // 如果嚴格過濾有找到就用找到的；若沒找到，則退而求其次顯示該組別的所有賽事，避免完全沒選項
+        // 若無完全符合則退而求其次顯示該組別所有賽事
         const fallbackList = res.schedule.filter(g => {
           const gameCategory = String(g.category || g.league_type || '').trim();
           return !currentDivision || gameCategory.includes(currentDivision) || gameCategory === '';
@@ -715,7 +716,7 @@
         const targetList = filteredGames.length > 0 ? filteredGames : (fallbackList.length > 0 ? fallbackList : res.schedule);
 
         selectEl.innerHTML = targetList.map(g => {
-          const gId = g.game_id || g.ID || 'G000';
+          const gId = g.game_id || 'G000';
           const gCode = g.game_code ? `[${g.game_code}]` : '';
           const gDate = g.date ? String(g.date).split('T')[0] : '';
           const gTime = g.time ? ` ${g.time}` : '';
@@ -724,7 +725,7 @@
         }).join('');
 
       } else {
-        selectEl.innerHTML = `<option value="">⚠️ 無法讀取遠端賽事 (請檢查遠端工作表名稱是否為 Schedule)</option>`;
+        selectEl.innerHTML = `<option value="">⚠️ 無法讀取遠端賽事: ${res.message || '請檢查遠端工作表名稱是否為 Games'}</option>`;
       }
     }
 
