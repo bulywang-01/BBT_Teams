@@ -3,7 +3,7 @@
 // ============================================================================
 
 // ⚠️ 請替換成您全新部署的 Google Apps Script 網頁應用程式網址
-const API_BASE_URL = "https://script.google.com/macros/s/AKfycbwFSkwrH-YROu9LhwEEHtScSXXbqqpVvKnlNGDJkPGwaLE7S4s3gMD3QjuGamk4AP6jrQ/exec";
+const API_BASE_URL = "https://script.google.com/macros/s/AKfycbzLsW1ccI4HVGy7kv1jLYhJeIhQ0q3Fp6dZaouIESTOJkkEW5pvj3ZKX7dXzej-6PNraQ/exec";
 
 /**
  * 通用 API 請求包裝器 (支援 GET / POST)
