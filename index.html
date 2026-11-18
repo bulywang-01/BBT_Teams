@@ -267,6 +267,17 @@
               </button>
             </div>
 
+            <!-- 🌟 新增：先選賽事再呈現名單的篩選列 -->
+            <div class="bg-white p-3 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div class="flex items-center space-x-2 w-full sm:w-auto">
+                <label class="text-xs font-bold text-slate-700 whitespace-nowrap">🎯 選擇檢視場次：</label>
+                <select id="filterAttendanceGameSelect" onchange="renderAttendanceTable()" class="w-full sm:w-80 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold bg-slate-50">
+                  <option value="ALL">-- 顯示全部未來賽事場次 --</option>
+                </select>
+              </div>
+              <span class="text-[11px] text-slate-400">💡 選擇特定場次以過濾檢視該場出勤名單</span>
+            </div>
+
             <div class="overflow-x-auto">
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
@@ -955,33 +966,46 @@
       }).join('');
     }
 
-    // 🌟 優化出賽表格：將數字 ID (如 199) 自動轉譯為漂亮的 [日期 時間] vs 對手 格式
+    // 🌟 更新出賽表格與賽事過濾選單連動
     function renderAttendanceTable() {
       const tbody = document.getElementById('attendanceTableBody');
-      const list = globalData.attendance.filter(att => String(att.team_id) === String(currentSelectedTeamId));
-
-      if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">目前尚無該球隊的出勤與請假紀錄</td></tr>`;
-        return;
-      }
-
-      // 從遠端賽事快取建立一個對照表 (game_id -> 格式化顯示字串)
-      // 這裡可以透過下拉選單裡已經載入的選項來對應
+      const filterSelect = document.getElementById('filterAttendanceGameSelect');
+      
+      // 1. 同步將遠端賽事填入「檢視篩選選單」（如果還沒填過的話）
       const selectEl = document.getElementById('attGameSelect');
       const gameMap = {};
-      if (selectEl) {
+      if (selectEl && filterSelect) {
+        let currentFilterVal = filterSelect.value;
+        let optionsHtml = `<option value="ALL">-- 顯示全部未來賽事場次 --</option>`;
         for (let opt of selectEl.options) {
           if (opt.value) {
             gameMap[opt.value] = opt.text;
+            optionsHtml += `<option value="${opt.value}">${opt.text}</option>`;
           }
         }
+        // 保持原本選中的狀態
+        filterSelect.innerHTML = optionsHtml;
+        filterSelect.value = currentFilterVal;
+      }
+
+      // 2. 取得目前選中的過濾場次 ID
+      const selectedGameFilter = filterSelect ? filterSelect.value : 'ALL';
+
+      // 3. 過濾出賽紀錄
+      let list = globalData.attendance.filter(att => String(att.team_id) === String(currentSelectedTeamId));
+      if (selectedGameFilter !== 'ALL') {
+        list = list.filter(att => String(att.game_id) === String(selectedGameFilter));
+      }
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">目前選擇的場次尚無球員出勤與請假紀錄</td></tr>`;
+        return;
       }
 
       tbody.innerHTML = list.map(att => {
         const pObj = globalData.roster.find(r => String(r.user_id) === String(att.user_id));
         const displayName = pObj ? `${pObj.player_name} (#${pObj.number || '—'})` : att.user_id;
 
-        // 如果對照表裡有這場比賽，就顯示美化後的字串；否則保留原本的 att.game_id
         let gameDisplay = gameMap[String(att.game_id)] || att.game_id;
 
         let statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">確認出席</span>';
