@@ -53,7 +53,6 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         <div class="flex items-center space-x-3">
-          <!-- 🌟 左上角聯盟 Logo：修正長寬比例，完整呈現不變形 -->
           <div class="h-10 flex items-center justify-center shrink-0">
             <img src="bbtlogo.png" alt="BBT League Logo" class="h-9 w-auto object-contain">
           </div>
@@ -152,7 +151,6 @@
         <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
           <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div class="flex items-center space-x-4">
-              <!-- 🌟 球隊專屬圖示容器 (支援 /logo 圖片或文字降級) -->
               <div id="teamLogoContainer" class="w-14 h-14 rounded-2xl overflow-hidden bg-bbt-navy text-white font-black text-lg flex items-center justify-center shadow-md border-2 border-emerald-500 shrink-0">
                 <span id="teamLogoText">BBT</span>
               </div>
@@ -510,7 +508,7 @@
         
         <div>
           <label class="font-bold text-slate-700 block mb-1">選擇球員 (免輸代號)</label>
-          <select id="attUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+          <select id="attUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed">
             <option value="">-- 請先選擇球隊或載入球員 --</option>
           </select>
         </div>
@@ -764,15 +762,27 @@
       loadRemoteScheduleOptions();
     }
 
-    function updateTeamPlayerSelects() {
-      const selectedGameId = document.getElementById('attGameSelect') ? document.getElementById('attGameSelect').value : '';
+    function updateTeamPlayerSelects(fixedUserId = '') {
       const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
       const editRecordId = document.getElementById('attEditRecordId').value;
+      const attUserSelect = document.getElementById('attUserSelect');
 
+      // 🌟 如果是修改模式，直接強制放入該球員並 disabled
+      if (editRecordId && fixedUserId) {
+        const pObj = teamRoster.find(p => String(p.user_id) === String(fixedUserId));
+        const pName = pObj ? `#${pObj.number || '—'} ${pObj.player_name} (${pObj.position || '球員'})` : fixedUserId;
+        
+        attUserSelect.innerHTML = `<option value="${fixedUserId}" selected>${pName}</option>`;
+        attUserSelect.disabled = true; // 鎖定不能選
+        return;
+      }
+
+      // 🌟 新增模式：正常過濾掉已回報過的球員
+      attUserSelect.disabled = false;
+      const selectedGameId = document.getElementById('attGameSelect') ? document.getElementById('attGameSelect').value : '';
       let availablePlayers = teamRoster;
 
-      // 🌟 修正：只有在「新增模式」才過濾掉已回報的球員；「修改模式」時要保留該球員供顯示與選擇
-      if (!editRecordId && selectedGameId) {
+      if (selectedGameId) {
         const alreadyReportedUserIds = new Set();
         globalData.attendance
           .filter(att => String(att.game_id) === String(selectedGameId) && String(att.team_id) === String(currentSelectedTeamId))
@@ -781,12 +791,9 @@
         availablePlayers = teamRoster.filter(p => !alreadyReportedUserIds.has(String(p.user_id)));
       }
 
-      const optionsHtml = availablePlayers.length > 0 
+      attUserSelect.innerHTML = availablePlayers.length > 0 
         ? availablePlayers.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
         : `<option value="">此場次該球隊所有球員皆已完成回報</option>`;
-
-      const attUserSelect = document.getElementById('attUserSelect');
-      if (attUserSelect) attUserSelect.innerHTML = optionsHtml;
 
       const faUserSelect = document.getElementById('faUserSelect');
       if (faUserSelect) {
@@ -907,7 +914,9 @@
           }).join('');
         }
 
-        updateTeamPlayerSelects();
+        if (!document.getElementById('attEditRecordId').value) {
+          updateTeamPlayerSelects();
+        }
         renderAttendanceTable();
 
       } else {
@@ -1013,22 +1022,21 @@
       }
     }
 
-    function editAttendance(attId) {
+    async function editAttendance(attId) {
       const att = globalData.attendance.find(a => String(a.att_id) === String(attId));
       if (!att) return;
 
       document.getElementById('attEditRecordId').value = att.att_id;
       document.getElementById('attendanceModalTitle').innerText = "修改球員出勤與請假狀態";
       
-      openAttendanceModal().then(() => {
-        document.getElementById('attGameSelect').value = att.game_id;
-        updateTeamPlayerSelects();
-        document.getElementById('attUserSelect').value = att.user_id;
-        // 🌟 修改時設定為唯讀或鎖定選中球員，避免混淆
-        document.getElementById('attUserSelect').disabled = false; 
-        document.getElementById('attStatus').value = att.status;
-        document.getElementById('attReason').value = att.reason || '';
-      });
+      await openAttendanceModal();
+      document.getElementById('attGameSelect').value = att.game_id;
+      
+      // 🌟 呼叫專門處理修改的帶入並鎖定球員函式
+      updateTeamPlayerSelects(att.user_id);
+
+      document.getElementById('attStatus').value = att.status;
+      document.getElementById('attReason').value = att.reason || '';
     }
 
     async function deleteAttendance(attId) {
