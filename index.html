@@ -677,30 +677,26 @@
       document.getElementById('faUserSelect').innerHTML = optionsHtml;
     }
 
-    // 🌟 動態從遠端載入賽事清單 (嚴格過濾本週起與該球隊賽事，拿掉前方數字)
+    // 🌟 動態從遠端載入賽事清單 (使用 game_id 當 value，顯示 [game_code] 日期 時間 (對戰))
     async function loadRemoteScheduleOptions() {
       const selectEl = document.getElementById('attGameSelect');
       selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
 
       const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Games');
 
-      if (res && res.result === 'ok`' || (res && res.result === 'ok' && res.schedule && res.schedule.length > 0)) {
+      if (res && res.result === 'ok' && res.schedule && res.schedule.length > 0) {
         const currentTeam = globalData.teams.find(t => String(t.team_id) === String(currentSelectedTeamId));
         const teamName = currentTeam ? String(currentTeam.team_name).trim() : '';
 
-        // 計算「本週週一」到「本週週日」的日期範圍
+        // 計算本週週一到週日
         const now = new Date();
-        const dayOfWeek = now.getDay(); // 0 (週日) 到 6 (週六)
+        const dayOfWeek = now.getDay();
         const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
         
         const monday = new Date(now);
         monday.setDate(now.getDate() + distanceToMonday);
-        monday.setHours(0, 0, 0, 0); // 本週週一開始
+        monday.setHours(0, 0, 0, 0);
 
-        // 過濾條件：
-        // 1. 組別符合
-        // 2. 只有該隊的賽事 (主隊或客隊包含該球隊名稱)
-        // 3. 日期條件：本週週一（或之後）的賽事才顯示
         const filteredGames = res.schedule.filter(g => {
           const gameCategory = String(g.category || g.league_type || '').trim();
           const homeTeam = String(g.home_team || '').trim();
@@ -713,12 +709,10 @@
           
           const matchTeam = !teamName || homeTeam.includes(teamName) || awayTeam.includes(teamName);
 
-          // 比對日期是否在本週週一之後
           let matchDate = true;
           if (g.date) {
             const gDate = new Date(g.date);
             if (!isNaN(gDate.getTime())) {
-              // 忽略時分秒直接比對日期
               gDate.setHours(0, 0, 0, 0);
               matchDate = gDate >= monday;
             }
@@ -731,8 +725,9 @@
 
         if (targetList.length > 0) {
           selectEl.innerHTML = targetList.map(g => {
-            const gId = g.game_id || 'G000';
-            const gCode = g.game_code ? `[${g.game_code}]` : `[${gId}]`;
+            // 💡 確保 value 是 game_id (內部主鍵)，顯示用 game_code
+            const valId = g.game_id || '';
+            const codeDisplay = g.game_code ? `[${g.game_code}]` : `[${valId}]`;
             
             // 格式化日期：YYYY/MM/DD
             let dateStr = '';
@@ -765,8 +760,8 @@
             const dateTimeDisplay = timeStr ? `${dateStr} ${timeStr}` : dateStr;
             const matchup = `${g.home_team || '主隊'} vs ${g.away_team || '客隊'}`;
             
-            // 💡 拿掉前方數字，直接顯示 [代碼] 日期 時間 (對戰組合)
-            return `<option value="${gId}">${gCode} : ${dateTimeDisplay} (${matchup})</option>`;
+            // 💡 格式：[game_code] 日期 時間 (對戰組合)
+            return `<option value="${valId}">${codeDisplay} ${dateTimeDisplay} (${matchup})</option>`;
           }).join('');
         } else {
           selectEl.innerHTML = `<option value="">本週及之後目前無該球隊的賽事</option>`;
