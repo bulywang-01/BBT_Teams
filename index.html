@@ -54,11 +54,11 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2 text-xs">
-        <div id="divisionSwitchGroup" class="flex bg-slate-800/80 p-1 rounded-xl border border-slate-700">
-          <button onclick="switchDiv('ALL')" id="btn-all" class="px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition">全聯盟</button>
-          <button onclick="switchDiv('大聯盟')" id="btn-maj" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">大聯盟組</button>
-          <button onclick="switchDiv('小聯盟')" id="btn-min" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">小聯盟組</button>
-          <button onclick="switchDiv('育成組')" id="btn-rok" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">育成組</button>
+        <div id="divisionSwitchGroup" class="flex items-center bg-slate-800/80 p-1 rounded-xl border border-slate-700 overflow-x-auto no-scrollbar max-w-full">
+          <button onclick="switchDiv('ALL')" id="btn-all" class="px-3 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition whitespace-nowrap shrink-0">全聯盟</button>
+          <button onclick="switchDiv('大聯盟')" id="btn-maj" class="px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700/80 transition whitespace-nowrap shrink-0">大聯盟</button>
+          <button onclick="switchDiv('小聯盟')" id="btn-min" class="px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700/80 transition whitespace-nowrap shrink-0">小聯盟</button>
+          <button onclick="switchDiv('育成組')" id="btn-rok" class="px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700/80 transition whitespace-nowrap shrink-0">育成組</button>
         </div>
 
         <select id="seasonSelect" onchange="onSeasonChange(this.value)" class="bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-1.5 font-bold">
