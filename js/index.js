@@ -49,6 +49,17 @@ async function initSystem() {
     globalData.attendance = res.attendance || [];
     globalData.users = res.users || [];
     globalData.history = res.history || [];
+    if (res.fa_window_config && typeof saveFaWindowConfig_ === 'function') {
+      const mergedFaCfg = {
+        ...(typeof getDefaultFaWindowConfig_ === 'function' ? getDefaultFaWindowConfig_() : {}),
+        ...res.fa_window_config,
+        enabled: res.fa_window_config.enabled !== undefined ? Boolean(res.fa_window_config.enabled) : true
+      };
+      saveFaWindowConfig_(mergedFaCfg);
+      if (typeof syncFaWindowUiImmediately_ === 'function') {
+        syncFaWindowUiImmediately_(mergedFaCfg);
+      }
+    }
     window.globalData = globalData;
 
     const restoredUser = typeof BBTAuth !== 'undefined' && typeof BBTAuth.restoreSession === 'function'
@@ -584,7 +595,7 @@ function bindFaWindowInstantListeners_() {
   });
 }
 
-function saveLeagueFaWindowSetting() {
+async function saveLeagueFaWindowSetting() {
   const enabled = Boolean(document.getElementById('faWindowEnabledInput')?.checked);
   const startDate = String(document.getElementById('faWindowStartInput')?.value || '').trim();
   const endDate = String(document.getElementById('faWindowEndInput')?.value || '').trim();
@@ -602,9 +613,18 @@ function saveLeagueFaWindowSetting() {
   };
   saveFaWindowConfig_(nextCfg);
   syncFaWindowUiImmediately_(nextCfg);
+
+  if (typeof callApi === 'function') {
+    const apiRes = await callApi('saveFaWindowConfig', { data: JSON.stringify(nextCfg) });
+    if (apiRes && apiRes.result !== 'ok') {
+      alert('❌ 同步後端 FA 期間設定失敗：' + (apiRes.message || '未知錯誤'));
+      return;
+    }
+  }
+
   refreshLeagueFaCenterContent_(nextCfg);
   renderOverviewKpiBoard();
-  alert('✅ 已儲存年度 FA 申請開關與期間設定！');
+  alert('✅ 已儲存並同步年度 FA 申請開關與期間設定！');
 }
 
 function renderOverviewKpiBoard() {
@@ -1747,10 +1767,23 @@ async function editAttendance(attId) {
 }
 
 async function deleteAttendance(attId) {
+  if (!attId) return;
   if (!confirm('確定要刪除這筆出勤紀錄嗎？')) return;
-  globalData.attendance = globalData.attendance.filter(a => String(a.att_id) !== String(attId));
-  alert('✅ 已成功刪除該筆出勤紀錄');
-  renderAttendanceTable();
+
+  const res = typeof callApi === 'function'
+    ? await callApi('deleteTeamAttendance', { att_id: attId })
+    : { result: 'error', message: '找不到 callApi 函式' };
+
+  if (res && res.result === 'ok') {
+    globalData.attendance = (globalData.attendance || []).filter(a => String(a.att_id) !== String(attId));
+    alert('✅ 已成功刪除該筆出勤紀錄');
+    renderAttendanceTable();
+    if (typeof initSystem === 'function') {
+      await initSystem();
+    }
+  } else {
+    alert('❌ 刪除出勤紀錄失敗：' + (res && res.message ? res.message : '未知錯誤'));
+  }
 }
 
 function openBatchAttendanceModal() {
