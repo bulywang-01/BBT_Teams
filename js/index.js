@@ -410,21 +410,29 @@ async function enrollExistingUserToTeam() {
   }
 }
 
+// --- 精準依 roster_id 編輯本隊球員背號與編制 ---
 function openEditRosterModal(userId, rosterId = '') {
   if (!currentSelectedTeamId) {
     alert('請先選擇球隊');
     return;
   }
-  const teamRoster = (globalData.roster || []).filter(
+
+  const teamUserRows = (globalData.roster || []).filter(
     r => String(r.team_id) === String(currentSelectedTeamId) && String(r.user_id) === String(userId)
   );
   const pObj = rosterId
-    ? teamRoster.find(r => String(r.roster_id) === String(rosterId))
-    : teamRoster[0];
+    ? teamUserRows.find(r => String(r.roster_id || '') === String(rosterId))
+    : teamUserRows[0];
+
   if (!pObj) return;
 
+  const hiddenRosterIdEl = document.getElementById('editRosterId');
+  if (hiddenRosterIdEl) {
+    hiddenRosterIdEl.value = pObj.roster_id || '';
+  }
+  window.__editingRosterId = pObj.roster_id || '';
+
   document.getElementById('editRosterUserId').value = pObj.user_id;
-  document.getElementById('editRosterId').value = pObj.roster_id || ''; // 記得在 Modal 放 <input type="hidden" id="editRosterId">
   document.getElementById('editRosterPlayerName').value = pObj.player_name || '';
   document.getElementById('editRosterNameDisplay').value = `${pObj.player_name || pObj.user_id} (${pObj.user_id})`;
   document.getElementById('editRosterNumber').value = pObj.number !== undefined && pObj.number !== null ? String(pObj.number) : '';
@@ -438,6 +446,9 @@ function openEditRosterModal(userId, rosterId = '') {
 }
 
 function closeEditRosterModal() {
+  window.__editingRosterId = '';
+  const hiddenRosterIdEl = document.getElementById('editRosterId');
+  if (hiddenRosterIdEl) hiddenRosterIdEl.value = '';
   document.getElementById('editRosterModal').classList.add('hidden');
   document.getElementById('editRosterModal').classList.remove('flex');
 }
@@ -449,15 +460,23 @@ async function submitEditRoster() {
   const roleType = document.getElementById('editRosterRoleType').value;
   const positionVal = document.getElementById('editRosterPosition').value.trim();
   const statusVal = document.getElementById('editRosterStatus').value;
+  const targetRosterId =
+    document.getElementById('editRosterId')?.value.trim() ||
+    window.__editingRosterId ||
+    '';
 
   if (!currentSelectedTeamId || !userId) return;
 
-  const existing = (globalData.roster || []).find(
-    r => String(r.team_id) === String(currentSelectedTeamId) && String(r.user_id) === userId
-  ) || {};
+  const existing = (globalData.roster || []).find(r => {
+    if (String(r.team_id) !== String(currentSelectedTeamId)) return false;
+    if (targetRosterId) return String(r.roster_id || '') === targetRosterId;
+    return String(r.user_id) === userId;
+  }) || {};
+
+  const resolvedRosterId = targetRosterId || existing.roster_id || '';
 
   const res = await BBTApi.saveRoster({
-    ...(existing.roster_id ? { roster_id: existing.roster_id } : {}),
+    ...(resolvedRosterId ? { roster_id: resolvedRosterId } : {}),
     team_id: currentSelectedTeamId,
     user_id: userId,
     player_name: playerName || existing.player_name || userId,
@@ -982,6 +1001,7 @@ function renderRosterTable() {
     const pStats = globalData.stats.find(s => String(s.user_id) === String(p.user_id) && String(s.season) === currentSeason);
     const statSummary = pStats ? `AVG .${Math.floor((pStats.h / (pStats.ab || 1)) * 1000)} / HR ${pStats.hr || 0}` : '尚無打擊紀錄';
     const isMe = currentUser && String(p.user_id) === String(currentUser.user_id);
+    const safeRosterId = String(p.roster_id || '').replace(/'/g, "\\'");
 
     return `
       <tr class="hover:bg-slate-50 transition ${isMe ? 'bg-emerald-50/40' : ''}">
@@ -1002,7 +1022,7 @@ function renderRosterTable() {
         <td class="p-3 text-center"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2 py-0.5 rounded-full text-[10px]">${p.status || 'approved'}</span></td>
         <td class="p-3 text-right">
           ${canManageRoster
-            ? `<button onclick="openEditRosterModal('${p.user_id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">改背號</button>`
+            ? `<button onclick="openEditRosterModal('${p.user_id}', '${safeRosterId}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">改背號</button>`
             : `<span class="text-slate-300 text-[10px]">—</span>`}
         </td>
       </tr>
