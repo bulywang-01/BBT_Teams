@@ -1309,20 +1309,68 @@ function renderAnnouncements() {
   `).join('');
 }
 
+let currentTxScopeFilter = 'all'; // 'all' | 'mine' | 'others_approved'
+
+function setTxScopeFilter(scope) {
+  currentTxScopeFilter = scope;
+  ['all', 'mine', 'others_approved'].forEach(key => {
+    const btn = document.getElementById('tx-scope-' + key);
+    if (!btn) return;
+    btn.className = key === scope
+      ? 'px-2.5 py-1 rounded-lg text-[11px] font-black bg-slate-800 text-white whitespace-nowrap transition'
+      : 'px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap transition';
+  });
+  renderTransactions();
+}
+
+function isApprovedTxStatus(statusVal) {
+  const s = String(statusVal || '').trim().toLowerCase();
+  return s === 'approved' || s === '已核准' || s === '核准' || s === '通過';
+}
+
 function renderTransactions() {
   const tbody = document.getElementById('transactionsTableBody');
-  const txs = (currentUser && currentUser.role !== 'super_admin')
-    ? globalData.transactions.filter(tx => String(tx.from_team_id) === String(currentSelectedTeamId) || String(tx.to_team_id) === String(currentSelectedTeamId))
-    : globalData.transactions;
+  if (!tbody) return;
 
-  if (txs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">目前尚無球員異動紀錄</td></tr>`;
+  const allTxs = globalData.transactions || [];
+  const teamIdStr = String(currentSelectedTeamId || '').trim();
+
+  const isTeamRelated = (tx) => {
+    if (!teamIdStr) return false;
+    return (
+      String(tx.from_team_id || '').trim() === teamIdStr ||
+      String(tx.to_team_id || '').trim() === teamIdStr ||
+      String(tx.team_id || '').trim() === teamIdStr
+    );
+  };
+
+  let filtered = allTxs.filter(tx => {
+    const mine = isTeamRelated(tx);
+    const approved = isApprovedTxStatus(tx.admin_status);
+
+    if (currentTxScopeFilter === 'mine') {
+      return teamIdStr ? mine : true;
+    }
+    if (currentTxScopeFilter === 'others_approved') {
+      return !mine && approved;
+    }
+    // 預設 'all'：在有選隊時，顯示本隊全部紀錄 + 他隊已審核通過紀錄
+    if (teamIdStr) {
+      return mine || approved;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">目前此篩選條件下尚無異動紀錄</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = txs.map(tx => {
-    const pObj = globalData.roster.find(r => String(r.user_id) === String(tx.user_id));
-    const uObj = globalData.users.find(u => String(u.user_id) === String(tx.user_id));
+  tbody.innerHTML = filtered.map(tx => {
+    const mine = isTeamRelated(tx);
+    const pObj = (globalData.roster || []).find(r => String(r.user_id) === String(tx.user_id));
+    const uObj = (globalData.users || []).find(u => String(u.user_id) === String(tx.user_id));
+
     let displayName = tx.user_id;
     if (pObj) {
       displayName = pObj.number ? `#${pObj.number} ${pObj.player_name}` : pObj.player_name;
@@ -1330,13 +1378,29 @@ function renderTransactions() {
       displayName = uObj.player_name;
     }
 
+    const scopeBadge = teamIdStr
+      ? (mine
+          ? '<span class="ml-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap">本隊</span>'
+          : '<span class="ml-1.5 bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap">他隊</span>')
+      : '';
+
+    const statusText = tx.admin_status || 'pending';
+    const statusBadgeClass = isApprovedTxStatus(statusText)
+      ? 'bg-emerald-100 text-emerald-800'
+      : 'bg-amber-100 text-amber-800';
+
     return `
-      <tr>
+      <tr class="hover:bg-slate-50 transition">
         <td class="p-3 text-slate-500 whitespace-nowrap">${tx.tx_date || '—'}</td>
-        <td class="p-3 whitespace-nowrap"><span class="bg-purple-100 text-purple-800 font-black px-2 py-0.5 rounded">${tx.tx_type}</span></td>
+        <td class="p-3 whitespace-nowrap">
+          <span class="bg-purple-100 text-purple-800 font-black px-2 py-0.5 rounded">${tx.tx_type}</span>
+          ${scopeBadge}
+        </td>
         <td class="p-3 font-black text-slate-900 whitespace-nowrap">${displayName}</td>
-        <td class="p-3">${tx.note || '—'}</td>
-        <td class="p-3 text-right whitespace-nowrap"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">${tx.admin_status}</span></td>
+        <td class="p-3 text-slate-700">${tx.note || '—'}</td>
+        <td class="p-3 text-right whitespace-nowrap">
+          <span class="${statusBadgeClass} font-bold px-2 py-0.5 rounded-full text-[11px]">${statusText}</span>
+        </td>
       </tr>
     `;
   }).join('');
