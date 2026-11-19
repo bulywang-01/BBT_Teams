@@ -1944,6 +1944,63 @@ function renderRosterTable() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+// --- 輔助函式：格式化歷屆紀錄日期與時間（避免只有日期時固定顯示 00:00） ---
+function formatHistoryDateTime_(rawDate, rawTime = '') {
+  const dateStr = String(rawDate || '').trim();
+  const timeStr = String(rawTime || '').trim();
+
+  if (!dateStr && !timeStr) return '';
+
+  // 若 rawDate 本身已包含時分秒（如 ISO 字串或 YYYY/MM/DD HH:mm:ss）
+  const fullMatch = dateStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (fullMatch) {
+    const y = fullMatch[1];
+    const m = String(fullMatch[2]).padStart(2, '0');
+    const d = String(fullMatch[3]).padStart(2, '0');
+    const hh = String(fullMatch[4]).padStart(2, '0');
+    const mm = String(fullMatch[5]).padStart(2, '0');
+    const ss = fullMatch[6] ? `:${String(fullMatch[6]).padStart(2, '0')}` : '';
+    // 若恰好是純午夜 00:00:00 且有另外傳入時間欄位，改用時間欄位
+    if (hh === '00' && mm === '00' && (!ss || ss === ':00') && timeStr) {
+      const tMatch = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (tMatch) {
+        const tHh = String(tMatch[1]).padStart(2, '0');
+        const tMm = String(tMatch[2]).padStart(2, '0');
+        const tSs = tMatch[3] ? `:${String(tMatch[3]).padStart(2, '0')}` : '';
+        return `${y}/${m}/${d} ${tHh}:${tMm}${tSs}`;
+      }
+      return `${y}/${m}/${d}`;
+    }
+    return `${y}/${m}/${d} ${hh}:${mm}${ss}`;
+  }
+
+  // 解析純日期（YYYY/MM/DD 或 YYYY-MM-DD）
+  const dMatch = dateStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  const baseDate = dMatch
+    ? `${dMatch[1]}/${String(dMatch[2]).padStart(2, '0')}/${String(dMatch[3]).padStart(2, '0')}`
+    : dateStr;
+
+  if (timeStr) {
+    const tFullMatch = timeStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (tFullMatch) {
+      const hh = String(tFullMatch[4]).padStart(2, '0');
+      const mm = String(tFullMatch[5]).padStart(2, '0');
+      const ss = tFullMatch[6] ? `:${String(tFullMatch[6]).padStart(2, '0')}` : '';
+      return baseDate ? `${baseDate} ${hh}:${mm}${ss}` : `${tFullMatch[1]}/${String(tFullMatch[2]).padStart(2, '0')}/${String(tFullMatch[3]).padStart(2, '0')} ${hh}:${mm}${ss}`;
+    }
+    const tMatch = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (tMatch) {
+      const hh = String(tMatch[1]).padStart(2, '0');
+      const mm = String(tMatch[2]).padStart(2, '0');
+      const ss = tMatch[3] ? `:${String(tMatch[3]).padStart(2, '0')}` : '';
+      return baseDate ? `${baseDate} ${hh}:${mm}${ss}` : `${hh}:${mm}${ss}`;
+    }
+  }
+
+  // 純日期無實際時間時，只顯示日期，不補假的 00:00
+  return baseDate;
+}
+
 async function openPlayerCard(userId) {
   activeCardUserId = userId;
   const cardRes = await BBTApi.getPlayerCard(userId, currentSeason);
@@ -1975,7 +2032,7 @@ async function openPlayerCard(userId) {
           </div>
           <div class="text-[10px] text-slate-400 text-right">
             <div>${h.season || ''}</div>
-            <div>${h.date || ''}</div>
+            <div>${formatHistoryDateTime_(h.date, h.time || h.created_at || h.updated_at)}</div>
           </div>
         </div>
       `).join('');
