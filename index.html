@@ -54,10 +54,11 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2 text-xs">
-        <div id="divisionFilterGroup" class="bg-slate-800 p-1 rounded-xl flex items-center space-x-1">
-          <button onclick="switchDiv('大聯盟')" id="btn-maj" class="px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition">大聯盟組</button>
-          <button onclick="switchDiv('小聯盟')" id="btn-min" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">小聯盟組</button>
-          <button onclick="switchDiv('育成組')" id="btn-rok" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-400 hover:text-white transition">育成組</button>
+        <div id="divisionSwitchGroup" class="flex bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+          <button onclick="switchDiv('ALL')" id="btn-all" class="px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition">全聯盟</button>
+          <button onclick="switchDiv('大聯盟')" id="btn-maj" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">大聯盟組</button>
+          <button onclick="switchDiv('小聯盟')" id="btn-min" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">小聯盟組</button>
+          <button onclick="switchDiv('育成組')" id="btn-rok" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">育成組</button>
         </div>
 
         <select id="seasonSelect" onchange="onSeasonChange(this.value)" class="bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-1.5 font-bold">
@@ -156,7 +157,8 @@
           </div>
         </div>
 
-        <div id="kpiQuickTeamChips" class="flex flex-wrap gap-2 pt-1"></div>
+        <div id="kpiQuickTeamChips" class="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-2"></div>
+        <div id="allTeamsDivisionBoard" class="mt-5 pt-4 border-t border-slate-100 space-y-5"></div>
       </div>
 
       <!-- 已選取球隊：球隊管理介面 -->
