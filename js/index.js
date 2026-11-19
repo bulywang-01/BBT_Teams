@@ -2171,13 +2171,13 @@ function renderFaGuideBanner_(isSuperAdmin) {
       <div class="flex flex-wrap items-center gap-1">
         <span class="px-2 py-0.5 rounded bg-purple-100 text-purple-800 font-black whitespace-nowrap">已確定FA隊伍</span>
         <span>知會原球隊 → 自行接洽新球隊 →</span>
-        <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">線上填寫表格 (點我)</button>
+        <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">宣告 FA 資格</button>
         <span>→ 等待聯盟審核 → 申請成功</span>
       </div>
       <div class="flex flex-wrap items-center gap-1">
         <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-black whitespace-nowrap">聯盟配對方式</span>
         <span>知會原球隊 →</span>
-        <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">線上填寫表格 (點我)</button>
+        <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">宣告 FA 資格</button>
         <span>→ 等待聯盟通知 → 待球員選擇隊伍 → 申請成功</span>
       </div>
     </div>
