@@ -1245,7 +1245,7 @@ function updateTeamPlayerSelects() {
         sel.name === 'faUserSelect' ||
         optTexts.some(t => t.includes('陳澤宇') || t.includes('王韶文') || t.includes('(球員)') || t.includes('(C)'));
       if (isPlayerSelect) {
-        const wrapper = sel.closest('.mb-3, .mb-4, .space-y-1, .space-y-1\.5, .form-group') || sel.parentElement;
+        const wrapper = sel.closest('.mb-3, .mb-4, .space-y-1, .form-group') || sel.parentElement;
         if (wrapper && wrapper !== modalEl) {
           wrapper.style.display = 'none';
           wrapper.classList.add('hidden');
