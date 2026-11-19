@@ -1,5 +1,5 @@
 // ============================================================================
-// BBT 軟式棒球聯盟 - 前端主控邏輯 (index.js)
+// BBT 軟式棒球聯盟 - 前端主控邏輯 (index.js) - 支援全聯盟分組總覽與手機緊湊版面
 // ============================================================================
 
 let globalData = {
@@ -87,8 +87,12 @@ async function initSystem() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-// --- 同步頂部組別按鈕樣式 ---
+// --- 同步頂部組別按鈕樣式（防止手機換行） ---
 function syncDivisionButtonsUI() {
+  const groupEl = document.getElementById('divisionSwitchGroup');
+  if (groupEl) {
+    groupEl.classList.add('overflow-x-auto', 'whitespace-nowrap', 'max-w-full');
+  }
   const btnMap = {
     'ALL': 'btn-all',
     '大聯盟': 'btn-maj',
@@ -99,9 +103,9 @@ function syncDivisionButtonsUI() {
     const btn = document.getElementById(btnId);
     if (!btn) return;
     if (divKey === currentDivision) {
-      btn.className = 'px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition';
+      btn.className = 'px-3 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition whitespace-nowrap shrink-0';
     } else {
-      btn.className = 'px-3.5 py-1 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700/80 transition';
+      btn.className = 'px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700/80 transition whitespace-nowrap shrink-0';
     }
   });
 }
@@ -139,20 +143,50 @@ function groupTeamsByDivision(teamsList) {
   return groups;
 }
 
+// --- 控制手機版側邊欄與返回按鈕，避免手機重複清單與過度捲動 ---
+function syncMobileViewportLayout(hasSelectedTeam) {
+  const leftSidebar = document.getElementById('leftTeamSidebar');
+  if (leftSidebar) {
+    // 手機版（< lg）一律隱藏左側清單，避免與主畫面全球隊卡片重複；桌機版（lg:block）維持顯示
+    leftSidebar.classList.add('hidden', 'lg:block');
+  }
+
+  // 在已選球隊的標頭區動態加入手機版「返回全球隊」快捷鈕
+  const selectedSection = document.getElementById('selectedTeamSection');
+  if (selectedSection && hasSelectedTeam) {
+    let backBar = document.getElementById('mobileBackToTeamsBar');
+    if (!backBar) {
+      backBar = document.createElement('div');
+      backBar.id = 'mobileBackToTeamsBar';
+      backBar.className = 'lg:hidden mb-2.5 flex items-center justify-between';
+      backBar.innerHTML = `
+        <button onclick="showKpiOverview()" class="inline-flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 text-xs font-black px-3 py-1.5 rounded-xl shadow-sm transition whitespace-nowrap">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5 text-emerald-600"></i>
+          <span>返回全球隊總覽</span>
+        </button>
+        <span class="text-[11px] font-bold text-slate-400">點選上方組別可快速切換</span>
+      `;
+      selectedSection.insertBefore(backBar, selectedSection.firstChild);
+    }
+  }
+}
+
 // --- 未選隊 KPI 總覽與全球隊分組畫面 ---
 function showKpiOverview() {
   currentSelectedTeamId = '';
   window.currentSelectedTeamId = '';
   renderTeamSidebar(document.getElementById('teamSearchInput')?.value || '');
   renderOverviewKpiBoard();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function focusTeamPicker() {
-  const leftSidebar = document.getElementById('leftTeamSidebar');
-  const searchInput = document.getElementById('teamSearchInput');
-  if (leftSidebar && !leftSidebar.classList.contains('hidden')) {
-    leftSidebar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const boardEl = document.getElementById('allTeamsDivisionBoard');
+  if (boardEl) {
+    boardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
   }
+  const searchInput = document.getElementById('teamSearchInput');
   if (searchInput) searchInput.focus();
 }
 
@@ -161,9 +195,12 @@ function renderOverviewKpiBoard() {
   const selectedSection = document.getElementById('selectedTeamSection');
   const hasSelectedTeam = Boolean(currentSelectedTeamId && globalData.teams.some(t => String(t.team_id) === String(currentSelectedTeamId)));
 
+  syncMobileViewportLayout(hasSelectedTeam);
+
   if (hasSelectedTeam) {
     kpiSection.classList.add('hidden');
     selectedSection.classList.remove('hidden');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     return;
   }
 
@@ -186,8 +223,8 @@ function renderOverviewKpiBoard() {
 
   document.getElementById('kpiSeasonBadge').innerText = currentSeason;
   document.getElementById('kpiSectionTitle').innerText = !isSuper
-    ? '我的球隊與賽季即時 KPI 總覽'
-    : (isAllDiv ? '全聯盟 — 全球隊與賽季即時 KPI 總覽' : `${currentDivision} — 賽季即時 KPI 總覽`);
+    ? '我的球隊與賽季總覽'
+    : (isAllDiv ? '全聯盟 — 全球隊總覽' : `${currentDivision}組 — 球隊與賽季總覽`);
 
   document.getElementById('kpiTeamCount').innerText = scopedTeams.length;
   document.getElementById('kpiTotalTeamSub').innerText = `全聯盟共 ${allTeams.length} 隊`;
@@ -197,23 +234,29 @@ function renderOverviewKpiBoard() {
   document.getElementById('kpiTxHistoryCount').innerText = historyTotal;
   document.getElementById('kpiPendingTxSub').innerText = `待審核 ${pendingTxCount} 筆`;
 
+  // 確保 KPI 四格在手機上維持緊湊 2x2 排列
+  const kpiCardsGrid = document.getElementById('kpiTeamCount')?.closest('.grid');
+  if (kpiCardsGrid) {
+    kpiCardsGrid.classList.remove('grid-cols-1');
+    kpiCardsGrid.classList.add('grid-cols-2', 'md:grid-cols-4', 'gap-2.5', 'sm:gap-3');
+  }
+
   const btnKpiCreate = document.getElementById('btnKpiCreateTeam');
   if (btnKpiCreate) {
     btnKpiCreate.classList.toggle('hidden', !isSuper);
   }
 
-  // 隱藏原本純文字快速按鈕（改以下方隊圖 + 隊名卡片呈現）
   const chipsEl = document.getElementById('kpiQuickTeamChips');
   if (chipsEl) {
     chipsEl.classList.add('hidden');
   }
 
-  // 渲染依組別區分的隊圖 + 隊名卡片牆
+  // 渲染依組別區分的隊圖 + 隊名卡片牆（手機 3 欄緊湊網格、不換行截斷）
   let boardEl = document.getElementById('allTeamsDivisionBoard');
   if (!boardEl && chipsEl && chipsEl.parentElement) {
     boardEl = document.createElement('div');
     boardEl.id = 'allTeamsDivisionBoard';
-    boardEl.className = 'mt-5 pt-4 border-t border-slate-100 space-y-5';
+    boardEl.className = 'mt-4 pt-3.5 border-t border-slate-100 space-y-4';
     chipsEl.parentElement.appendChild(boardEl);
   }
 
@@ -223,20 +266,20 @@ function renderOverviewKpiBoard() {
     } else {
       const grouped = groupTeamsByDivision(scopedTeams);
       boardEl.innerHTML = grouped.map(grp => `
-        <div class="space-y-2.5">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5 whitespace-nowrap">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
               <h4 class="text-xs font-black text-slate-800 tracking-wide">${grp.division}組</h4>
               <span class="text-[11px] font-bold text-slate-400">(${grp.teams.length} 隊)</span>
             </div>
-            <span class="text-[11px] text-slate-400">點選球隊檢視編制與球員詳細資料</span>
+            <span class="text-[11px] text-slate-400 whitespace-nowrap">點選進入球員名單</span>
           </div>
-          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 sm:gap-3">
             ${grp.teams.map(t => `
-              <button onclick="selectTeam('${t.team_id}')" class="group bg-slate-50 hover:bg-slate-900 border border-slate-200 hover:border-emerald-500 rounded-2xl p-4 flex flex-col items-center justify-center gap-2.5 transition shadow-sm hover:shadow-md text-center">
-                ${buildTeamLogoHtml(t, 'w-14 h-14 text-lg')}
-                <div class="font-black text-sm text-slate-900 group-hover:text-white truncate w-full">${t.team_name}</div>
+              <button onclick="selectTeam('${t.team_id}')" class="group bg-slate-50 hover:bg-slate-900 active:scale-[0.98] border border-slate-200 hover:border-emerald-500 rounded-2xl p-2.5 sm:p-4 flex flex-col items-center justify-center gap-1.5 sm:gap-2.5 transition shadow-sm hover:shadow-md text-center min-w-0">
+                ${buildTeamLogoHtml(t, 'w-11 h-11 sm:w-14 sm:h-14 text-base sm:text-lg')}
+                <div class="font-black text-xs sm:text-sm text-slate-900 group-hover:text-white truncate w-full whitespace-nowrap">${t.team_name}</div>
               </button>
             `).join('')}
           </div>
@@ -599,7 +642,7 @@ async function submitEditRoster() {
   }
 }
 
-// --- 左側聯盟球隊清單（依組別區分，精簡只顯示隊圖 + 隊名） ---
+// --- 桌機版左側聯盟球隊清單（依組別區分，精簡只顯示隊圖 + 隊名） ---
 function renderTeamSidebar(searchKeyword = '') {
   const container = document.getElementById('teamSidebarContainer');
   const isAllDiv = currentDivision === 'ALL';
@@ -629,7 +672,7 @@ function renderTeamSidebar(searchKeyword = '') {
       <div onclick="selectTeam('${t.team_id}')" class="team-card p-2.5 ${cardStyle} rounded-xl cursor-pointer transition flex items-center justify-between">
         <div class="flex items-center space-x-3 min-w-0">
           ${buildTeamLogoHtml(t, 'w-10 h-10 text-xs')}
-          <div class="font-black text-sm truncate">${t.team_name}</div>
+          <div class="font-black text-sm truncate whitespace-nowrap">${t.team_name}</div>
         </div>
         <i data-lucide="chevron-right" class="w-4 h-4 shrink-0 ${isSelected ? 'text-emerald-400' : 'text-slate-300'}"></i>
       </div>
@@ -640,7 +683,7 @@ function renderTeamSidebar(searchKeyword = '') {
     const grouped = groupTeamsByDivision(filtered);
     container.innerHTML = grouped.map(grp => `
       <div class="space-y-1.5 pt-1 first:pt-0">
-        <div class="px-1 flex items-center justify-between text-[11px] font-black text-slate-400">
+        <div class="px-1 flex items-center justify-between text-[11px] font-black text-slate-400 whitespace-nowrap">
           <span>${grp.division}組</span>
           <span>${grp.teams.length} 隊</span>
         </div>
@@ -697,6 +740,7 @@ function selectTeam(teamId) {
   renderRosterTable();
   renderAnnouncements();
   loadRemoteScheduleOptions();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function updateTeamPlayerSelects() {
@@ -950,31 +994,31 @@ function renderAttendanceTable() {
     const displayName = pObj ? `${pObj.player_name} (#${pObj.number || '—'})` : att.user_id;
     const gameDisplay = globalGameCache[String(att.game_id)] || att.game_id;
 
-    let statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">確認出席</span>';
-    if (att.status === 'leave') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">缺席請假</span>';
-    if (att.status === 'sub') statusBadge = '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">候補支援</span>';
+    let statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">確認出席</span>';
+    if (att.status === 'leave') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">缺席請假</span>';
+    if (att.status === 'sub') statusBadge = '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">候補支援</span>';
 
     const isSelfRecord = currentUser && String(att.user_id) === String(currentUser.user_id);
     let actionButtonsHtml = '<span class="text-slate-300 text-[10px]">—</span>';
     if (isAdminRole) {
       actionButtonsHtml = `
-        <button onclick="editAttendance('${att.att_id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">修改</button>
-        <button onclick="deleteAttendance('${att.att_id}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">刪除</button>
+        <button onclick="editAttendance('${att.att_id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition whitespace-nowrap">修改</button>
+        <button onclick="deleteAttendance('${att.att_id}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition whitespace-nowrap">刪除</button>
       `;
     } else if (isSelfRecord) {
       actionButtonsHtml = `
-        <button onclick="editAttendance('${att.att_id}')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">修改狀態</button>
+        <button onclick="editAttendance('${att.att_id}')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition whitespace-nowrap">修改狀態</button>
       `;
     }
 
     return `
       <tr>
-        <td class="p-3 font-black text-slate-900">${gameDisplay}</td>
-        <td class="p-3 font-bold">${displayName}</td>
+        <td class="p-3 font-black text-slate-900 whitespace-nowrap">${gameDisplay}</td>
+        <td class="p-3 font-bold whitespace-nowrap">${displayName}</td>
         <td class="p-3">${statusBadge}</td>
         <td class="p-3 text-slate-600">${att.reason || '—'}</td>
-        <td class="p-3 text-slate-400">${att.updated_at || '—'}</td>
-        <td class="p-3 text-right space-x-1.5">${actionButtonsHtml}</td>
+        <td class="p-3 text-slate-400 whitespace-nowrap">${att.updated_at || '—'}</td>
+        <td class="p-3 text-right space-x-1.5 whitespace-nowrap">${actionButtonsHtml}</td>
       </tr>
     `;
   }).join('');
@@ -1121,24 +1165,24 @@ function renderRosterTable() {
 
     return `
       <tr class="hover:bg-slate-50 transition ${isMe ? 'bg-emerald-50/40' : ''}">
-        <td class="p-3 font-black text-slate-900">${p.number !== undefined && p.number !== null && String(p.number) !== '' ? `#${p.number}` : '—'}</td>
-        <td class="p-3">
+        <td class="p-3 font-black text-slate-900 whitespace-nowrap">${p.number !== undefined && p.number !== null && String(p.number) !== '' ? `#${p.number}` : '—'}</td>
+        <td class="p-3 whitespace-nowrap">
           <div class="flex items-center gap-2">
-            <button onclick="openPlayerCard('${p.user_id}')" class="font-black text-bbt-navy hover:text-emerald-600 underline decoration-emerald-400 decoration-2 underline-offset-4 flex items-center gap-1">
+            <button onclick="openPlayerCard('${p.user_id}')" class="font-black text-bbt-navy hover:text-emerald-600 underline decoration-emerald-400 decoration-2 underline-offset-4 flex items-center gap-1 whitespace-nowrap">
               <span>${p.player_name}</span>
-              <i data-lucide="id-card" class="w-3.5 h-3.5 text-emerald-600"></i>
+              <i data-lucide="id-card" class="w-3.5 h-3.5 text-emerald-600 shrink-0"></i>
             </button>
-            ${isMe ? '<span class="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">本人</span>' : ''}
+            ${isMe ? '<span class="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shrink-0">本人</span>' : ''}
           </div>
         </td>
-        <td class="p-3"><span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold text-[11px]">${p.role_type || 'player'}</span></td>
-        <td class="p-3">${p.position || '—'}</td>
-        <td class="p-3 text-slate-500">${p.bat_throw || '—'}</td>
-        <td class="p-3 text-right font-black text-slate-800">${statSummary}</td>
-        <td class="p-3 text-center"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2 py-0.5 rounded-full text-[10px]">${p.status || 'approved'}</span></td>
-        <td class="p-3 text-right">
+        <td class="p-3 whitespace-nowrap"><span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold text-[11px]">${p.role_type || 'player'}</span></td>
+        <td class="p-3 whitespace-nowrap">${p.position || '—'}</td>
+        <td class="p-3 text-slate-500 whitespace-nowrap">${p.bat_throw || '—'}</td>
+        <td class="p-3 text-right font-black text-slate-800 whitespace-nowrap">${statSummary}</td>
+        <td class="p-3 text-center whitespace-nowrap"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2 py-0.5 rounded-full text-[10px]">${p.status || 'approved'}</span></td>
+        <td class="p-3 text-right whitespace-nowrap">
           ${canManageRoster
-            ? `<button onclick="openEditRosterModal('${p.user_id}', '${safeRosterId}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">異動</button>`
+            ? `<button onclick="openEditRosterModal('${p.user_id}', '${safeRosterId}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition whitespace-nowrap">異動</button>`
             : `<span class="text-slate-300 text-[10px]">—</span>`}
         </td>
       </tr>
@@ -1288,11 +1332,11 @@ function renderTransactions() {
 
     return `
       <tr>
-        <td class="p-3 text-slate-500">${tx.tx_date || '—'}</td>
-        <td class="p-3"><span class="bg-purple-100 text-purple-800 font-black px-2 py-0.5 rounded">${tx.tx_type}</span></td>
-        <td class="p-3 font-black text-slate-900">${displayName}</td>
+        <td class="p-3 text-slate-500 whitespace-nowrap">${tx.tx_date || '—'}</td>
+        <td class="p-3 whitespace-nowrap"><span class="bg-purple-100 text-purple-800 font-black px-2 py-0.5 rounded">${tx.tx_type}</span></td>
+        <td class="p-3 font-black text-slate-900 whitespace-nowrap">${displayName}</td>
         <td class="p-3">${tx.note || '—'}</td>
-        <td class="p-3 text-right"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">${tx.admin_status}</span></td>
+        <td class="p-3 text-right whitespace-nowrap"><span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">${tx.admin_status}</span></td>
       </tr>
     `;
   }).join('');
@@ -1400,7 +1444,7 @@ function filterRosterRole(role) {
   currentRosterFilter = role;
   ['all', 'player', 'coach', 'manager'].forEach(r => {
     const btn = document.getElementById('filter-role-' + r);
-    if (btn) btn.className = r === role ? "px-3 py-1 rounded-lg text-xs font-black bg-slate-800 text-white" : "px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200";
+    if (btn) btn.className = r === role ? "px-3 py-1 rounded-lg text-xs font-black bg-slate-800 text-white whitespace-nowrap" : "px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap";
   });
   renderRosterTable();
 }
