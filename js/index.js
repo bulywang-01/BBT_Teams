@@ -867,6 +867,57 @@ function updateTeamPlayerSelects() {
   }
 }
 
+function parseScheduleDate_(rawDate) {
+  if (!rawDate) return null;
+  if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+    return new Date(rawDate.getFullYear(), rawDate.getMonth(), rawDate.getDate());
+  }
+  const str = String(rawDate).trim();
+  const ymdMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (ymdMatch) {
+    return new Date(Number(ymdMatch[1]), Number(ymdMatch[2]) - 1, Number(ymdMatch[3]));
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  return null;
+}
+
+function getCurrentWeekMonday_() {
+  const now = new Date();
+  const day = now.getDay(); // 0=日, 1=一, ..., 6=六
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
+}
+
+function isTeamInGame_(game, teamObj) {
+  if (!teamObj) return true;
+  const teamName = String(teamObj.team_name || '').trim().toLowerCase();
+  const teamId = String(teamObj.team_id || '').trim().toLowerCase();
+  const home = String(game.home_team || '').trim().toLowerCase();
+  const away = String(game.away_team || '').trim().toLowerCase();
+  const homeId = String(game.home_team_id || '').trim().toLowerCase();
+  const awayId = String(game.away_team_id || '').trim().toLowerCase();
+
+  return (
+    (teamName && (home.includes(teamName) || away.includes(teamName))) ||
+    (teamId && (homeId === teamId || awayId === teamId))
+  );
+}
+
+function isDivisionMatch_(game, activeDiv) {
+  if (!activeDiv || activeDiv === 'ALL') return true;
+  const cat = String(game.category || game.league_type || game.division || '').trim().toLowerCase();
+  if (!cat) return true;
+  return (
+    cat.includes(String(activeDiv).toLowerCase()) ||
+    (activeDiv === '大聯盟' && cat.includes('major')) ||
+    (activeDiv === '小聯盟' && cat.includes('minor')) ||
+    (activeDiv === '育成組' && (cat.includes('rookie') || cat.includes('dev')))
+  );
+}
+
 async function loadRemoteScheduleOptions() {
   const selectEl = document.getElementById('attGameSelect');
   const filterSelect = document.getElementById('filterAttendanceGameSelect');
@@ -874,82 +925,58 @@ async function loadRemoteScheduleOptions() {
 
   if (!currentSelectedTeamId) return;
 
-  if (selectEl && !document.getElementById('attEditRecordId').value) {
+  const isEditingExistingAtt = Boolean(document.getElementById('attEditRecordId')?.value);
+  if (selectEl && !isEditingExistingAtt) {
     selectEl.innerHTML = `<option value="">正在從遠端 Games 賽事表載入賽程...</option>`;
   }
 
   const res = await BBTApi.getRemoteSchedule(REMOTE_SCHEDULE_SHEET_ID, 'Games');
 
-  if (res && res.result === 'ok' && res.schedule && res.schedule.length > 0) {
-    const currentTeam = globalData.teams.find(t => String(t.team_id) === String(currentSelectedTeamId));
+  if (res && res.result === 'ok' && Array.isArray(res.schedule) && res.schedule.length > 0) {
+    const currentTeam = (globalData.teams || []).find(
+      t => String(t.team_id) === String(currentSelectedTeamId)
+    );
     const teamName = currentTeam ? String(currentTeam.team_name).trim() : '';
     const activeDiv = (currentDivision && currentDivision !== 'ALL')
       ? currentDivision
       : String(currentTeam?.division || '').trim();
 
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const distanceToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const weekMonday = getCurrentWeekMonday_();
+    const isManagerRole = Boolean(
+      currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'team_admin')
+    );
 
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + distanceToMonday);
-    monday.setHours(0, 0, 0, 0);
-
-    const filteredGames = res.schedule.filter(g => {
-      const gameCategory = String(g.category || g.league_type || '').trim();
-      const homeTeam = String(g.home_team || '').trim();
-      const awayTeam = String(g.away_team || '').trim();
-
-      const matchDiv = !activeDiv ||
-                       gameCategory.includes(activeDiv) ||
-                       (activeDiv === '大聯盟' && gameCategory.toLowerCase().includes('major')) ||
-                       (activeDiv === '小聯盟' && gameCategory.toLowerCase().includes('minor'));
-
-      const matchTeam = !teamName || homeTeam.includes(teamName) || awayTeam.includes(teamName);
-
-      let matchDate = true;
-      if (g.date) {
-        const gDate = new Date(g.date);
-        if (!isNaN(gDate.getTime())) {
-          gDate.setHours(0, 0, 0, 0);
-          matchDate = gDate >= monday;
-        }
-      }
-
-      return matchDiv && matchTeam && matchDate;
-    });
-
+    // 先建立所有場次的顯示文字快取
     res.schedule.forEach(g => {
-      const valId = String(g.game_id || '');
+      const valId = String(g.game_id || '').trim();
       if (!valId) return;
 
       const home = String(g.home_team || '').trim();
       const away = String(g.away_team || '').trim();
-      let opponent = teamName ? (home === teamName ? away : (away === teamName ? home : `${home} vs ${away}`)) : `${home} vs ${away}`;
+      const opponent = teamName
+        ? (home.toLowerCase() === teamName.toLowerCase()
+            ? away
+            : (away.toLowerCase() === teamName.toLowerCase() ? home : `${home} vs ${away}`))
+        : `${home} vs ${away}`;
 
       let dateStr = '';
-      if (g.date) {
-        const d = new Date(g.date);
-        if (!isNaN(d.getTime())) {
-          dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
-        } else {
-          const parts = String(g.date).split('T')[0].split('-');
-          if (parts.length === 3) dateStr = `${parts[1]}/${parts[2]}`;
-          else dateStr = String(g.date).split('T')[0];
-        }
+      const parsedDate = parseScheduleDate_(g.date);
+      if (parsedDate) {
+        dateStr = `${String(parsedDate.getMonth() + 1).padStart(2, '0')}/${String(parsedDate.getDate()).padStart(2, '0')}`;
+      } else if (g.date) {
+        dateStr = String(g.date).split('T')[0];
       }
 
       let timeStr = '';
       if (g.time) {
-        const tStr = String(g.time);
+        const tStr = String(g.time).trim();
         if (tStr.includes('1899') || tStr.includes('1900')) {
           const dt = new Date(g.time);
           if (!isNaN(dt.getTime())) {
             timeStr = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
           }
         } else if (tStr.includes(' ')) {
-          const parts = tStr.split(' ');
-          timeStr = parts[parts.length - 1].substring(0, 5);
+          timeStr = tStr.split(' ').pop().substring(0, 5);
         } else {
           timeStr = tStr.substring(0, 5);
         }
@@ -959,36 +986,90 @@ async function loadRemoteScheduleOptions() {
       globalGameCache[valId] = `[${dateTimeDisplay}] vs ${opponent}`;
     });
 
-    const targetList = filteredGames.length > 0 ? filteredGames : res.schedule;
-    if (selectEl) {
-      selectEl.innerHTML = targetList.map(g => {
-        const valId = g.game_id || '';
-        return `<option value="${valId}">${globalGameCache[valId] || valId}</option>`;
-      }).join('');
-    }
+    // 1. 該隊對戰賽事（含組別比對）
+    const teamGames = res.schedule.filter(g => {
+      if (!String(g.game_id || '').trim()) return false;
+      return isTeamInGame_(g, currentTeam) && isDivisionMatch_(g, activeDiv);
+    });
 
-    if (filterSelect) {
-      let currentFilterVal = filterSelect.value;
-      let filterOptionsHtml = `<option value="ALL">-- 顯示全部賽事場次 --</option>`;
-      targetList.forEach(g => {
-        const valId = g.game_id || '';
-        filterOptionsHtml += `<option value="${valId}">${globalGameCache[valId] || valId}</option>`;
-      });
-      filterSelect.innerHTML = filterOptionsHtml;
-      filterSelect.value = currentFilterVal;
+    // 2. 本週（週一至週日）（含）之後的賽事
+    const upcomingGames = teamGames.filter(g => {
+      const gDate = parseScheduleDate_(g.date);
+      if (!gDate) return true; // 若日期未填寫則保留供點名
+      return gDate >= weekMonday;
+    });
+
+    // 3. 歷史賽事（本週一之前，僅供管理者修正實際出勤）
+    const historyGames = isManagerRole
+      ? teamGames.filter(g => {
+          const gDate = parseScheduleDate_(g.date);
+          return gDate && gDate < weekMonday;
+        })
+      : [];
+
+    const buildGroupedOptionsHtml = (placeholderText) => {
+      let html = placeholderText ? `<option value="">${placeholderText}</option>` : '';
+
+      if (upcomingGames.length > 0) {
+        html += `<optgroup label="本週（含）起對戰賽事">` + upcomingGames.map(g => {
+          const id = String(g.game_id).trim();
+          return `<option value="${id}">${globalGameCache[id] || id}</option>`;
+        }).join('') + `</optgroup>`;
+      } else {
+        html += `<option value="" disabled>本週（含）起暫無該隊對戰賽事</option>`;
+      }
+
+      if (historyGames.length > 0) {
+        html += `<optgroup label="歷史賽事（管理者修正出勤）">` + historyGames.map(g => {
+          const id = String(g.game_id).trim();
+          return `<option value="${id}">【歷史修正】${globalGameCache[id] || id}</option>`;
+        }).join('') + `</optgroup>`;
+      }
+
+      return html;
+    };
+
+    if (selectEl && !isEditingExistingAtt) {
+      selectEl.innerHTML = buildGroupedOptionsHtml('');
+      const firstValidOpt = selectEl.querySelector('option[value]:not([value=""])');
+      if (firstValidOpt) selectEl.value = firstValidOpt.value;
     }
 
     if (batchGameSelect) {
-      batchGameSelect.innerHTML = `<option value="">-- 請選擇比賽場次 --</option>` + targetList.map(g => {
-        const valId = g.game_id || '';
-        return `<option value="${valId}">${globalGameCache[valId] || valId}</option>`;
-      }).join('');
+      const prevBatchVal = batchGameSelect.value;
+      batchGameSelect.innerHTML = buildGroupedOptionsHtml('-- 請選擇比賽場次 --');
+      if (prevBatchVal && batchGameSelect.querySelector(`option[value="${prevBatchVal}"]`)) {
+        batchGameSelect.value = prevBatchVal;
+      }
+    }
+
+    if (filterSelect) {
+      const prevFilterVal = filterSelect.value;
+      let filterHtml = `<option value="ALL">-- 顯示全部賽事場次 --</option>`;
+      if (upcomingGames.length > 0) {
+        filterHtml += `<optgroup label="本週（含）起對戰賽事">` + upcomingGames.map(g => {
+          const id = String(g.game_id).trim();
+          return `<option value="${id}">${globalGameCache[id] || id}</option>`;
+        }).join('') + `</optgroup>`;
+      }
+      if (historyGames.length > 0) {
+        filterHtml += `<optgroup label="歷史賽事（管理者修正出勤）">` + historyGames.map(g => {
+          const id = String(g.game_id).trim();
+          return `<option value="${id}">【歷史修正】${globalGameCache[id] || id}</option>`;
+        }).join('') + `</optgroup>`;
+      }
+      filterSelect.innerHTML = filterHtml;
+      if (prevFilterVal && filterSelect.querySelector(`option[value="${prevFilterVal}"]`)) {
+        filterSelect.value = prevFilterVal;
+      }
     }
 
     updateTeamPlayerSelects();
     renderAttendanceTable();
   } else {
-    if (selectEl) selectEl.innerHTML = `<option value="">⚠️ 無法讀取遠端賽事資料</option>`;
+    if (selectEl && !isEditingExistingAtt) {
+      selectEl.innerHTML = `<option value="">⚠️ 無法讀取遠端賽事資料</option>`;
+    }
   }
 }
 
