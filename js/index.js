@@ -2213,6 +2213,215 @@ function formatTxPlayerName_(tx) {
   return tx.user_id || '—';
 }
 
+function isRejectedStatus_(statusVal) {
+  const s = String(statusVal || '').trim().toLowerCase();
+  return ['rejected', '已駁回', '駁回', '拒絕', '已拒絕', 'denied', 'declined'].includes(s);
+}
+
+function isCompletedFaStatus_(statusVal) {
+  return isApprovedStatus_(statusVal) || isRejectedStatus_(statusVal);
+}
+
+function getTxYear_(tx) {
+  const raw = String(tx?.tx_date || tx?.created_at || tx?.updated_at || '').trim();
+  const match = raw.match(/(\d{4})/);
+  if (match) return Number(match[1]);
+  const seasonMatch = String(currentSeason || '').match(/(\d{4})/);
+  return seasonMatch ? Number(seasonMatch[1]) : new Date().getFullYear();
+}
+
+function hasBorrowedNextYearQuota_(tx) {
+  return (
+    tx?.used_next_year_quota === true ||
+    String(tx?.note || '').includes('預支明年額度') ||
+    String(tx?.note || '').includes('預支')
+  );
+}
+
+function getPlayerFaEligibility_(userId, refDate = new Date()) {
+  const uid = String(userId || '').trim();
+  if (!uid) {
+    return {
+      canApply: false,
+      hasInProgress: false,
+      usedCurrentYearQuota: false,
+      borrowedNextYearQuota: false,
+      nextYearQuotaConsumed: false,
+      reason: '無法辨識球員身分'
+    };
+  }
+
+  const currentYear = refDate.getFullYear();
+  const prevYear = currentYear - 1;
+  const nextYear = currentYear + 1;
+
+  const playerFaTxs = (globalData.transactions || []).filter(
+    tx => isFaRecord_(tx) && String(tx.user_id || '').trim() === uid
+  );
+
+  // 1. 只要有尚未完成（非成功也非拒絕）的 FA 申請，一律鎖定
+  const inProgressTx = playerFaTxs.find(tx => !isCompletedFaStatus_(tx.admin_status));
+  if (inProgressTx) {
+    return {
+      canApply: false,
+      hasInProgress: true,
+      usedCurrentYearQuota: false,
+      borrowedNextYearQuota: false,
+      nextYearQuotaConsumed: false,
+      reason: '已有進行中的 FA 宣告（待聯盟完成成功或拒絕後才能再次提出）'
+    };
+  }
+
+  // 2. 檢查是否於去年（prevYear）已預支「今年（currentYear）」額度 -> 今年額度已用完，今年可提出 0 次（除非再預支明年額度，但每年總上限含預支為 1 次今年額度 + 1 次預支額度）
+  const prevYearTxs = playerFaTxs.filter(tx => getTxYear_(tx) === prevYear);
+  const borrowedCurrentYearFromPrevYear = prevYearTxs.some(tx => hasBorrowedNextYearQuota_(tx));
+
+  // 3. 統計今年（currentYear）已提出紀錄與是否已預支明年額度
+  const thisYearTxs = playerFaTxs.filter(tx => getTxYear_(tx) === currentYear);
+  const currentYearCount = thisYearTxs.length;
+  const borrowedNextYearInThisYear = thisYearTxs.some(tx => hasBorrowedNextYearQuota_(tx));
+
+  // 情況 A：今年尚未提出 FA，且去年未預支今年額度 -> 可使用今年額度（1 次）
+  if (currentYearCount === 0 && !borrowedCurrentYearFromPrevYear) {
+    return {
+      canApply: true,
+      hasInProgress: false,
+      usedCurrentYearQuota: false,
+      borrowedNextYearQuota: false,
+      nextYearQuotaConsumed: false,
+      quotaMode: 'CURRENT_YEAR',
+      reason: `${currentYear} 年度 FA 額度尚可使用（一年 1 次）`
+    };
+  }
+
+  // 情況 B：今年尚未提出 FA，但去年已預支今年額度 -> 今年一般額度已用掉，但仍可預支明年（nextYear）額度於今年再提 1 次（提出後明年 nextYear 不能提 FA）
+  if (currentYearCount === 0 && borrowedCurrentYearFromPrevYear) {
+    return {
+      canApply: true,
+      hasInProgress: false,
+      usedCurrentYearQuota: true,
+      borrowedNextYearQuota: false,
+      nextYearQuotaConsumed: false,
+      quotaMode: 'BORROW_NEXT_YEAR',
+      reason: `${currentYear} 年度額度已於去年預支，可預支 ${nextYear} 年度額度於今年再提 1 次（提出後 ${nextYear} 年不能提 FA）`
+    };
+  }
+
+  // 情況 C：今年已提出 1 次且尚未預支明年額度 -> 可使用今年/明年額度於今年再提第 2 次（若本次預支明年額度，明年 nextYear 不能提 FA）
+  if (currentYearCount === 1 && !borrowedNextYearInThisYear) {
+    return {
+      canApply: true,
+      hasInProgress: false,
+      usedCurrentYearQuota: true,
+      borrowedNextYearQuota: false,
+      nextYearQuotaConsumed: false,
+      quotaMode: 'BORROW_NEXT_YEAR',
+      reason: `${currentYear} 年度已提出 1 次，可預支 ${nextYear} 年度額度於今年再提 1 次（提出後 ${nextYear} 年不能提 FA）`
+    };
+  }
+
+  // 情況 D：今年已提出 >= 2 次，或今年已預支明年額度 -> 今年額度已用罄，且明年額度已被使用
+  const reasonText = borrowedNextYearInThisYear
+    ? `${currentYear} 年度額度及 ${nextYear} 年度預支額度皆已使用（${nextYear} 年不能再提 FA）`
+    : `${currentYear} 年度 FA 額度已達上限`;
+
+  return {
+    canApply: false,
+    hasInProgress: false,
+    usedCurrentYearQuota: true,
+    borrowedNextYearQuota: borrowedNextYearInThisYear,
+    nextYearQuotaConsumed: borrowedNextYearInThisYear,
+    quotaMode: 'EXHAUSTED',
+    reason: reasonText
+  };
+}
+
+function syncFaApplyButtonsState_() {
+  const isSuper = Boolean(currentUser && currentUser.role === 'super_admin');
+  const isPlayerSelf = Boolean(currentUser && currentUser.role === 'player');
+  const selfUserId = String(currentUser?.user_id || '').trim();
+  const winStatus = checkFaWindowStatus_();
+
+  let elig = {
+    canApply: true,
+    hasInProgress: false,
+    quotaMode: 'CURRENT_YEAR',
+    reason: ''
+  };
+
+  if (!isSuper && selfUserId) {
+    elig = getPlayerFaEligibility_(selfUserId);
+  }
+
+  const shouldAllow = isSuper || (isPlayerSelf && winStatus.isOpen && elig.canApply);
+  const disabledMsg = !winStatus.isOpen
+    ? `目前不在 FA 申請期間（${winStatus.reason}）`
+    : (elig.reason || '目前無法提出 FA 宣告');
+
+  const applyButtons = Array.from(document.querySelectorAll('button')).filter(btn => {
+    const onClickAttr = String(btn.getAttribute('onclick') || '');
+    const txt = String(btn.textContent || '');
+    return onClickAttr.includes('openFaApplyModal') || txt.includes('宣告 FA 資格');
+  });
+
+  applyButtons.forEach(btn => {
+    if (btn.closest('#faWorkflowGuideBanner')) {
+      if (!shouldAllow) {
+        btn.setAttribute('disabled', 'disabled');
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+        btn.title = disabledMsg;
+      } else {
+        btn.removeAttribute('disabled');
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+        btn.title = elig.quotaMode === 'BORROW_NEXT_YEAR'
+          ? elig.reason
+          : '宣告 FA 資格';
+      }
+      return;
+    }
+
+    if (!shouldAllow) {
+      btn.setAttribute('disabled', 'disabled');
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+      btn.title = disabledMsg;
+      if (btn.textContent && btn.textContent.includes('宣告 FA')) {
+        if (!btn.dataset.origLabel) btn.dataset.origLabel = btn.innerHTML;
+        if (elig.hasInProgress) {
+          btn.innerHTML = 'FA 審核進行中（已停用）';
+        } else if (!elig.canApply) {
+          btn.innerHTML = '年度 FA 額度已用罄';
+        }
+      }
+    } else {
+      btn.removeAttribute('disabled');
+      btn.disabled = false;
+      btn.classList.remove('opacity-50', 'cursor-not-allowed');
+      if (btn.dataset.origLabel) {
+        btn.innerHTML = btn.dataset.origLabel;
+      }
+      btn.title = elig.quotaMode === 'BORROW_NEXT_YEAR'
+        ? elig.reason
+        : '宣告 FA 資格';
+    }
+  });
+
+  const modalSubmitBtn = document.querySelector('#faApplyModal button[onclick*="submitFaApply"]');
+  if (modalSubmitBtn) {
+    if (!shouldAllow) {
+      modalSubmitBtn.setAttribute('disabled', 'disabled');
+      modalSubmitBtn.disabled = true;
+      modalSubmitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    } else {
+      modalSubmitBtn.removeAttribute('disabled');
+      modalSubmitBtn.disabled = false;
+      modalSubmitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+  }
+}
+
 function renderFaGuideBanner_(isSuperAdmin) {
   const tbody = document.getElementById('transactionsTableBody');
   const tableEl = tbody ? tbody.closest('table') : null;
@@ -2361,6 +2570,7 @@ function renderTransactions() {
   }
 
   tbody.innerHTML = html;
+  syncFaApplyButtonsState_();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -2432,19 +2642,30 @@ function ensureFaModeSelector_() {
 
 function openFaApplyModal() {
   const isSuper = Boolean(currentUser && currentUser.role === 'super_admin');
+  const selfUserId = String(currentUser?.user_id || '').trim();
   const winStatus = checkFaWindowStatus_();
   if (!isSuper && !winStatus.isOpen) {
     alert(`目前不在年度 FA 申請期間內（${winStatus.reason}），無法提出 FA 宣告。`);
     return;
   }
+  if (!isSuper && selfUserId) {
+    const elig = getPlayerFaEligibility_(selfUserId);
+    if (!elig.canApply) {
+      alert(`目前無法提出 FA 宣告：${elig.reason}`);
+      syncFaApplyButtonsState_();
+      return;
+    }
+  }
   ensureFaModeSelector_();
   updateTeamPlayerSelects();
   clearFaNoteDefault_();
+  syncFaApplyButtonsState_();
   document.getElementById('faApplyModal').classList.remove('hidden');
   document.getElementById('faApplyModal').classList.add('flex');
   setTimeout(() => {
     updateTeamPlayerSelects();
     clearFaNoteDefault_();
+    syncFaApplyButtonsState_();
   }, 0);
 }
 function closeFaApplyModal() { document.getElementById('faApplyModal').classList.add('hidden'); document.getElementById('faApplyModal').classList.remove('flex'); }
@@ -2500,21 +2721,36 @@ async function submitFaApply() {
 
   if (!user_id) { alert('請選擇球員'); return; }
 
+  const elig = getPlayerFaEligibility_(user_id);
+  if (!isSuper && !elig.canApply) {
+    alert(`❌ 無法送出 FA 宣告：${elig.reason}`);
+    syncFaApplyButtonsState_();
+    return;
+  }
+
+  const isBorrowingNextYear = elig.quotaMode === 'BORROW_NEXT_YEAR';
+  const nextYear = new Date().getFullYear() + 1;
+  const quotaTag = isBorrowingNextYear ? `・預支明年額度(${nextYear}年不可再提FA)` : '';
+
   const combinedNote = rawNote
-    ? `【${flowMode}・已通知原隊】${rawNote}`
-    : `【${flowMode}・已通知原隊】球員自行提出 FA 宣告，待聯盟審核`;
+    ? `【${flowMode}・已通知原隊${quotaTag}】${rawNote}`
+    : `【${flowMode}・已通知原隊${quotaTag}】球員自行提出 FA 宣告，待聯盟審核`;
 
   const res = await BBTApi.saveTransaction({
     tx_type: 'FA申請',
     user_id,
     from_team_id: currentSelectedTeamId,
     to_team_id: flowMode === '由聯盟配對' ? 'LEAGUE_MATCH' : 'FA_MARKET',
+    used_next_year_quota: isBorrowingNextYear,
     note: combinedNote
   });
   if (res && res.result === 'ok') {
-    alert('✅ FA 宣告申請已送出，待聯盟審核後將同步至 fa.php 市場！');
+    alert(isBorrowingNextYear
+      ? `✅ FA 宣告申請已送出（已使用 ${nextYear} 年度額度），待聯盟審核後將同步至 fa.php 市場！`
+      : '✅ FA 宣告申請已送出，待聯盟審核後將同步至 fa.php 市場！');
     closeFaApplyModal();
-    initSystem();
+    await initSystem();
+    syncFaApplyButtonsState_();
   } else {
     alert('❌ 申請失敗: ' + (res && res.message ? res.message : ''));
   }
