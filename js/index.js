@@ -479,17 +479,62 @@ function closeEnrollExistingModal() {
   document.getElementById('enrollExistingModal').classList.remove('flex');
 }
 
+function isInactiveRosterStatus_(statusVal) {
+  const s = String(statusVal || '').trim().toLowerCase();
+  return ['inactive', 'released', 'left', 'retired', '離隊', '停用', '釋出'].includes(s);
+}
+
+function isApprovedFaToTargetTeam_(userId, targetTeamId) {
+  const uid = String(userId || '').trim();
+  const tid = String(targetTeamId || '').trim();
+  if (!uid || !tid) return false;
+
+  const targetTeam = (globalData.teams || []).find(t => String(t.team_id).trim() === tid);
+  const tname = targetTeam ? String(targetTeam.team_name || '').trim() : '';
+
+  return (globalData.transactions || []).some(tx => {
+    if (String(tx.user_id || '').trim() !== uid) return false;
+    const typeStr = String(tx.tx_type || '').trim().toUpperCase();
+    if (!typeStr.includes('FA')) return false;
+
+    const statusStr = String(tx.admin_status || '').trim().toLowerCase();
+    const isApproved = ['approved', '已核准', '核准', '通過'].includes(statusStr);
+    if (!isApproved) return false;
+
+    const toTeam = String(tx.to_team_id || '').trim();
+    const toTeamName = String(tx.to_team_name || '').trim();
+    return toTeam === tid || (tname && (toTeam === tname || toTeamName === tname));
+  });
+}
+
 function renderAvailableUsersForEnrollment(selectId, teamId) {
   const selectEl = document.getElementById(selectId);
   if (!selectEl) return;
 
+  const targetTeamId = String(teamId || '').trim();
   const allUsers = globalData.users || [];
-  const teamRoster = (globalData.roster || []).filter(r => String(r.team_id) === String(teamId));
-  const enrolledIds = new Set(teamRoster.map(r => String(r.user_id).trim()));
+  const allRoster = globalData.roster || [];
+
+  // 找出「目前在其他球隊為現役狀態」的 user_id 集合，以及「已在本隊名單內」的 user_id 集合
+  const enrolledInCurrentTeamIds = new Set();
+  const activeInOtherTeamIds = new Set();
+
+  allRoster.forEach(r => {
+    const uid = String(r.user_id || '').trim();
+    const rTeamId = String(r.team_id || '').trim();
+    if (!uid) return;
+
+    if (rTeamId === targetTeamId) {
+      enrolledInCurrentTeamIds.add(uid);
+    } else if (rTeamId && !isInactiveRosterStatus_(r.status)) {
+      activeInOtherTeamIds.add(uid);
+    }
+  });
 
   const candidates = allUsers.filter(u => {
     const uid = String(u.user_id || '').trim();
-    if (!uid || enrolledIds.has(uid)) return false;
+    if (!uid) return false;
+    if (enrolledInCurrentTeamIds.has(uid)) return false;
     if (isSystemAdminAccount(u)) return false;
 
     const active =
@@ -497,11 +542,18 @@ function renderAvailableUsersForEnrollment(selectId, teamId) {
       u.is_active === undefined ||
       String(u.is_active).toUpperCase() === 'TRUE' ||
       String(u.is_active) === '1';
-    return active;
+    if (!active) return false;
+
+    // 若已在他隊現役，除非已確定 FA 核准到本隊，否則不可出現在選單
+    if (activeInOtherTeamIds.has(uid)) {
+      return isApprovedFaToTargetTeam_(uid, targetTeamId);
+    }
+
+    return true;
   });
 
   if (candidates.length === 0) {
-    selectEl.innerHTML = `<option value="">-- 目前無可登錄的已建帳號 --</option>`;
+    selectEl.innerHTML = `<option value="">-- 目前無可登錄的已建帳號（他隊現役球員需先離隊或確定 FA 至本隊） --</option>`;
     return;
   }
 
@@ -509,7 +561,8 @@ function renderAvailableUsersForEnrollment(selectId, teamId) {
     `<option value="">-- 請選擇已建帳號 --</option>` +
     candidates.map(u => {
       const nameLabel = u.player_name || u.account || u.user_id;
-      return `<option value="${u.user_id}">${nameLabel} (${u.user_id} / 帳號: ${u.account})</option>`;
+      const faTag = activeInOtherTeamIds.has(String(u.user_id).trim()) ? ' · FA確定入隊' : '';
+      return `<option value="${u.user_id}">${nameLabel} (${u.user_id} / 帳號: ${u.account}${faTag})</option>`;
     }).join('');
 }
 
@@ -706,9 +759,9 @@ function selectTeam(teamId) {
 
   currentSelectedTeamId = teamId;
   window.currentSelectedTeamId = teamId;
-  renderTeamSidebar(document.getElementById('teamSearchInput').value);
+  renderTeamSidebar(document.getElementById('teamSearchInput')?.value || '');
 
-  const team = globalData.teams.find(t => String(t.team_id) === String(teamId));
+  const team = (globalData.teams || []).find(t => String(t.team_id) === String(teamId));
   if (!team) {
     showKpiOverview();
     return;
@@ -728,17 +781,20 @@ function selectTeam(teamId) {
   const logoPath = `logo/${team.team_id}.png`;
 
   const logoContainer = document.getElementById('teamLogoContainer');
-  logoContainer.innerHTML = `
-    <img src="${logoPath}" alt="${team.team_name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-    <span style="display:none;" class="w-full h-full items-center justify-center">${fallbackChar}</span>
-  `;
+  if (logoContainer) {
+    logoContainer.innerHTML = `
+      <img src="${logoPath}" alt="${team.team_name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+      <span style="display:none;" class="w-full h-full items-center justify-center">${fallbackChar}</span>
+    `;
+  }
 
-  document.getElementById('editTeamIntro').value = team.intro || '';
-  document.getElementById('editTeamContact').value = team.contact_name || '';
-  document.getElementById('editTeamPhone').value = team.contact_phone || '';
+  if (document.getElementById('editTeamIntro')) document.getElementById('editTeamIntro').value = team.intro || '';
+  if (document.getElementById('editTeamContact')) document.getElementById('editTeamContact').value = team.contact_name || '';
+  if (document.getElementById('editTeamPhone')) document.getElementById('editTeamPhone').value = team.contact_phone || '';
 
   renderRosterTable();
   renderAnnouncements();
+  renderTransactions(); // <-- 換隊時立刻更新本隊與他隊已核准 FA
   loadRemoteScheduleOptions();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
