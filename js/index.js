@@ -58,12 +58,15 @@ async function initSystem() {
     if (!restoredUser) {
       document.getElementById('userNameDisplay').innerText = '未登入';
       document.getElementById('userTitleDisplay').innerText = '請先登入系統';
-      syncDivisionButtonsUI();
-      renderOverviewKpiBoard();
+      const kpiSection = document.getElementById('unselectedKpiSection');
+      const selectedSection = document.getElementById('selectedTeamSection');
+      const leftSidebar = document.getElementById('leftTeamSidebar');
+      if (kpiSection) kpiSection.classList.add('hidden');
+      if (selectedSection) selectedSection.classList.add('hidden');
+      if (leftSidebar) leftSidebar.classList.add('hidden');
       if (typeof BBTAuth !== 'undefined' && typeof BBTAuth.openLoginModal === 'function') {
         BBTAuth.openLoginModal();
       }
-      renderTeamSidebar();
       if (typeof lucide !== 'undefined') lucide.createIcons();
       return;
     }
@@ -192,6 +195,251 @@ function focusTeamPicker() {
   if (searchInput) searchInput.focus();
 }
 
+const FA_WINDOW_STORAGE_KEY = 'BBT_FA_WINDOW_CONFIG_V1';
+
+function getDefaultFaWindowConfig_() {
+  const seasonYearMatch = String(currentSeason || '').match(/(\d{4})/);
+  const baseYear = seasonYearMatch ? Number(seasonYearMatch[1]) : new Date().getFullYear();
+  const targetYear = baseYear + 1;
+  return {
+    enabled: true,
+    startDate: `${targetYear}-02-01`,
+    endDate: `${targetYear}-02-28`,
+    label: `${targetYear} 年度 FA 申請期間`
+  };
+}
+
+function getFaWindowConfig_() {
+  const defaults = getDefaultFaWindowConfig_();
+  try {
+    const raw = localStorage.getItem(FA_WINDOW_STORAGE_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    return {
+      enabled: parsed.enabled !== undefined ? Boolean(parsed.enabled) : defaults.enabled,
+      startDate: parsed.startDate || defaults.startDate,
+      endDate: parsed.endDate || defaults.endDate,
+      label: parsed.label || defaults.label
+    };
+  } catch (err) {
+    return defaults;
+  }
+}
+
+function saveFaWindowConfig_(cfg) {
+  localStorage.setItem(FA_WINDOW_STORAGE_KEY, JSON.stringify(cfg));
+}
+
+function checkFaWindowStatus_(nowDate = new Date()) {
+  const cfg = getFaWindowConfig_();
+  if (!cfg.enabled) {
+    return {
+      isOpen: false,
+      reason: '聯盟目前已關閉年度 FA 申請開關',
+      cfg
+    };
+  }
+  const todayStr = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}-${String(nowDate.getDate()).padStart(2, '0')}`;
+  if (cfg.startDate && todayStr < cfg.startDate) {
+    return {
+      isOpen: false,
+      reason: `尚未開放（開放期間：${cfg.startDate} 至 ${cfg.endDate || '未定'}）`,
+      cfg
+    };
+  }
+  if (cfg.endDate && todayStr > cfg.endDate) {
+    return {
+      isOpen: false,
+      reason: `申請期間已截止（開放期間：${cfg.startDate || '未定'} 至 ${cfg.endDate}）`,
+      cfg
+    };
+  }
+  return {
+    isOpen: true,
+    reason: `申請開放中（${cfg.startDate || '—'} ～ ${cfg.endDate || '—'}）`,
+    cfg
+  };
+}
+
+function ensureLeagueFaCenterModal_() {
+  if (document.getElementById('leagueFaCenterModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'leagueFaCenterModal';
+  modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-3';
+  modal.innerHTML = `
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+      <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
+        <div class="font-black text-sm flex items-center gap-2 whitespace-nowrap">
+          <i data-lucide="gavel" class="w-4 h-4 text-emerald-400"></i>
+          <span>聯盟 FA 審查與年度申請期間設定</span>
+        </div>
+        <button onclick="closeLeagueFaCenterModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 whitespace-nowrap">✕</button>
+      </div>
+
+      <div class="p-4 overflow-y-auto space-y-4 text-xs">
+        <!-- 年度 FA 申請開關與期間設定 -->
+        <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="font-black text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>年度 FA 申請開關與起訖日期</span>
+            </div>
+            <span id="faWindowStatusBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-black whitespace-nowrap"></span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end">
+            <label class="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 cursor-pointer select-none">
+              <input id="faWindowEnabledInput" type="checkbox" class="w-4 h-4 rounded text-emerald-600 border-slate-300">
+              <span class="font-black text-slate-800 whitespace-nowrap">啟用 FA 申請通道</span>
+            </label>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-600 mb-1">開放起始日</label>
+              <input id="faWindowStartInput" type="date" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-600 mb-1">開放截止日</label>
+              <input id="faWindowEndInput" type="date" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-2 pt-1">
+            <span id="faWindowHintText" class="text-[11px] text-slate-500">僅在啟用且位於起訖日期內時，球員才可提出 FA 宣告。</span>
+            <button type="button" onclick="saveLeagueFaWindowSetting()" class="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs whitespace-nowrap shrink-0">儲存期間設定</button>
+          </div>
+        </div>
+
+        <!-- 聯盟待審核與年度 FA 審查清單 -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <div class="font-black text-slate-900 whitespace-nowrap">FA 宣告案件審查清單</div>
+            <span id="leagueFaPendingSummary" class="text-[11px] font-bold text-amber-700 whitespace-nowrap"></span>
+          </div>
+          <div id="leagueFaReviewList" class="space-y-2"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function refreshLeagueFaCenterContent_() {
+  const cfg = getFaWindowConfig_();
+  const winStatus = checkFaWindowStatus_();
+
+  const enabledEl = document.getElementById('faWindowEnabledInput');
+  const startEl = document.getElementById('faWindowStartInput');
+  const endEl = document.getElementById('faWindowEndInput');
+  const badgeEl = document.getElementById('faWindowStatusBadge');
+  const summaryEl = document.getElementById('leagueFaPendingSummary');
+  const listEl = document.getElementById('leagueFaReviewList');
+
+  if (enabledEl) enabledEl.checked = cfg.enabled;
+  if (startEl) startEl.value = cfg.startDate || '';
+  if (endEl) endEl.value = cfg.endDate || '';
+
+  if (badgeEl) {
+    badgeEl.innerText = winStatus.isOpen ? '目前開放申請' : '目前未開放';
+    badgeEl.className = winStatus.isOpen
+      ? 'px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 whitespace-nowrap'
+      : 'px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 whitespace-nowrap';
+  }
+
+  const allFaTxs = (globalData.transactions || []).filter(tx => isFaRecord_(tx));
+  const pendingFaTxs = allFaTxs.filter(tx => isPendingStatus_(tx.admin_status));
+  const approvedFaTxs = allFaTxs.filter(tx => isApprovedStatus_(tx.admin_status));
+
+  if (summaryEl) {
+    summaryEl.innerText = `待審核 ${pendingFaTxs.length} 筆・年度已核准 ${approvedFaTxs.length} 人`;
+  }
+
+  if (listEl) {
+    if (allFaTxs.length === 0) {
+      listEl.innerHTML = `<div class="p-4 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">目前尚無任何 FA 宣告紀錄</div>`;
+    } else {
+      listEl.innerHTML = allFaTxs.map(tx => {
+        const playerLabel = formatTxPlayerName_(tx);
+        const fromTeam = (globalData.teams || []).find(t => String(t.team_id) === String(tx.from_team_id));
+        const teamName = fromTeam ? fromTeam.team_name : (tx.from_team_id || '—');
+        const statusText = tx.admin_status || 'pending';
+        const isPending = isPendingStatus_(statusText);
+        const isApproved = isApprovedStatus_(statusText);
+        const statusBadge = isApproved
+          ? '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] whitespace-nowrap">已核准</span>'
+          : (isPending
+              ? '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px] whitespace-nowrap">待審核</span>'
+              : `<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold text-[10px] whitespace-nowrap">${statusText}</span>`);
+
+        const actionBtns = (isPending && tx.tx_id)
+          ? `
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button type="button" onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'approved')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] whitespace-nowrap">核准</button>
+              <button type="button" onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'rejected')" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-black text-[11px] whitespace-nowrap">駁回</button>
+            </div>
+          `
+          : '';
+
+        return `
+          <div class="p-3 rounded-xl border border-slate-200 bg-white flex flex-wrap items-center justify-between gap-2">
+            <div class="space-y-0.5 min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="font-black text-slate-900">${playerLabel}</span>
+                <span class="text-[11px] font-bold text-slate-500">(${teamName})</span>
+                ${statusBadge}
+              </div>
+              <div class="text-[11px] text-slate-600">${tx.note || '—'}</div>
+              <div class="text-[10px] text-slate-400">${tx.tx_date || ''} · ${tx.tx_id || ''}</div>
+            </div>
+            ${actionBtns}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+}
+
+function openLeagueFaCenterModal() {
+  const isSuper = Boolean(currentUser && currentUser.role === 'super_admin');
+  if (!isSuper) {
+    alert('僅聯盟總管理員可使用 FA 審查與期間設定');
+    return;
+  }
+  ensureLeagueFaCenterModal_();
+  refreshLeagueFaCenterContent_();
+  const modal = document.getElementById('leagueFaCenterModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function closeLeagueFaCenterModal() {
+  const modal = document.getElementById('leagueFaCenterModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+function saveLeagueFaWindowSetting() {
+  const enabled = Boolean(document.getElementById('faWindowEnabledInput')?.checked);
+  const startDate = document.getElementById('faWindowStartInput')?.value || '';
+  const endDate = document.getElementById('faWindowEndInput')?.value || '';
+
+  if (enabled && startDate && endDate && startDate > endDate) {
+    alert('開放起始日不可晚於截止日');
+    return;
+  }
+
+  saveFaWindowConfig_({
+    enabled,
+    startDate,
+    endDate,
+    label: `${currentSeason} 年度 FA 申請期間`
+  });
+  refreshLeagueFaCenterContent_();
+  renderOverviewKpiBoard();
+  alert('✅ 已儲存年度 FA 申請開關與期間設定！');
+}
+
 function renderOverviewKpiBoard() {
   const kpiSection = document.getElementById('unselectedKpiSection');
   const selectedSection = document.getElementById('selectedTeamSection');
@@ -236,15 +484,59 @@ function renderOverviewKpiBoard() {
   document.getElementById('kpiTxHistoryCount').innerText = historyTotal;
   document.getElementById('kpiPendingTxSub').innerText = `待審核 ${pendingTxCount} 筆`;
 
+  const allFaTxs = globalData.transactions || [];
+  const seasonPrefix = String(currentSeason || '').split('-')[0] || String(new Date().getFullYear());
+  const annualFaCount = allFaTxs.filter(tx => {
+    if (!isFaRecord_(tx)) return false;
+    const dStr = String(tx.tx_date || '');
+    return !dStr || dStr.startsWith(seasonPrefix);
+  }).length;
+  const annualApprovedFaCount = allFaTxs.filter(tx => {
+    if (!isFaRecord_(tx) || !isApprovedStatus_(tx.admin_status)) return false;
+    const dStr = String(tx.tx_date || '');
+    return !dStr || dStr.startsWith(seasonPrefix);
+  }).length;
+
   const kpiCardsGrid = document.getElementById('kpiTeamCount')?.closest('.grid');
   if (kpiCardsGrid) {
-    kpiCardsGrid.classList.remove('grid-cols-1');
-    kpiCardsGrid.classList.add('grid-cols-2', 'md:grid-cols-4', 'gap-2.5', 'sm:gap-3');
+    kpiCardsGrid.classList.remove('grid-cols-1', 'md:grid-cols-4');
+    kpiCardsGrid.classList.add('grid-cols-2', 'sm:grid-cols-3', 'lg:grid-cols-5', 'gap-2.5', 'sm:gap-3');
+
+    let faKpiCard = document.getElementById('kpiAnnualFaCard');
+    if (!faKpiCard) {
+      faKpiCard = document.createElement('div');
+      faKpiCard.id = 'kpiAnnualFaCard';
+      faKpiCard.className = 'bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3.5 sm:p-4';
+      kpiCardsGrid.appendChild(faKpiCard);
+    }
+    const winStatus = checkFaWindowStatus_();
+    faKpiCard.innerHTML = `
+      <div class="text-[11px] font-bold text-slate-500">年度 FA 人數</div>
+      <div id="kpiAnnualFaCount" class="text-2xl sm:text-3xl font-black text-purple-700 mt-1">${annualFaCount}</div>
+      <div class="text-[11px] text-slate-400 mt-1">已核准 ${annualApprovedFaCount} 人 · ${winStatus.isOpen ? '申請開放中' : '申請未開放'}</div>
+    `;
   }
 
   const btnKpiCreate = document.getElementById('btnKpiCreateTeam');
   if (btnKpiCreate) {
     btnKpiCreate.classList.toggle('hidden', !isSuper);
+    const actionBar = btnKpiCreate.parentElement;
+    if (actionBar) {
+      let faBtn = document.getElementById('btnKpiFaReview');
+      if (!faBtn) {
+        faBtn = document.createElement('button');
+        faBtn.id = 'btnKpiFaReview';
+        faBtn.type = 'button';
+        faBtn.onclick = openLeagueFaCenterModal;
+        faBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 whitespace-nowrap shrink-0';
+        actionBar.insertBefore(faBtn, btnKpiCreate);
+      }
+      faBtn.classList.toggle('hidden', !isSuper);
+      faBtn.innerHTML = `
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        <span>FA 審查${pendingTxCount > 0 ? ` (${pendingTxCount})` : ''}</span>
+      `;
+    }
   }
 
   const chipsEl = document.getElementById('kpiQuickTeamChips');
@@ -1716,7 +2008,7 @@ function renderFaGuideBanner_(isSuperAdmin) {
         <span>→ 等待聯盟審核 → 申請成功</span>
       </div>
       <div class="flex flex-wrap items-center gap-1">
-        <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-black whitespace-nowrap">聯盟配對</span>
+        <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-black whitespace-nowrap">聯盟配對方式</span>
         <span>知會原球隊 →</span>
         <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">線上填寫表格 (點我)</button>
         <span>→ 等待聯盟通知 → 待球員選擇隊伍 → 申請成功</span>
@@ -1872,14 +2164,20 @@ function ensureFaModeSelector_() {
   wrap.innerHTML = `
     <label class="block text-xs font-bold text-slate-700 mb-1">FA 申請途徑（由球員提出並知會原球隊）</label>
     <select id="faFlowModeSelect" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white">
-      <option value="已確定FA隊伍">已確定FA隊伍</option>
-      <option value="聯盟配對">聯盟配對</option>
+      <option value="已確定球隊">已確定球隊</option>
+      <option value="由聯盟配對">由聯盟配對</option>
     </select>
   `;
   host.parentElement.insertBefore(wrap, host);
 }
 
 function openFaApplyModal() {
+  const isSuper = Boolean(currentUser && currentUser.role === 'super_admin');
+  const winStatus = checkFaWindowStatus_();
+  if (!isSuper && !winStatus.isOpen) {
+    alert(`目前不在年度 FA 申請期間內（${winStatus.reason}），無法提出 FA 宣告。`);
+    return;
+  }
   ensureFaModeSelector_();
   updateTeamPlayerSelects();
   document.getElementById('faApplyModal').classList.remove('hidden');
@@ -1931,7 +2229,7 @@ async function submitAnnouncement() {
 async function submitFaApply() {
   const user_id = document.getElementById('faUserSelect').value;
   const rawNote = document.getElementById('faNote').value.trim();
-  const flowMode = document.getElementById('faFlowModeSelect')?.value || '已確定FA隊伍';
+  const flowMode = document.getElementById('faFlowModeSelect')?.value || '已確定球隊';
 
   if (!user_id) { alert('請選擇球員'); return; }
 
@@ -1943,7 +2241,7 @@ async function submitFaApply() {
     tx_type: 'FA申請',
     user_id,
     from_team_id: currentSelectedTeamId,
-    to_team_id: flowMode === '聯盟配對' ? 'LEAGUE_MATCH' : 'FA_MARKET',
+    to_team_id: flowMode === '由聯盟配對' ? 'LEAGUE_MATCH' : 'FA_MARKET',
     note: combinedNote
   });
   if (res && res.result === 'ok') {
