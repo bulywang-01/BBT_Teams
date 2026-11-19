@@ -3089,3 +3089,351 @@ function filterRosterRole(role) {
 
 function filterTeamSidebar(keyword) { renderTeamSidebar(keyword); }
 function onSeasonChange(season) { currentSeason = season; initSystem(); }
+
+// ============================================================================
+// 球季清單管理、球隊加入球季設定與歷屆球季戰績模組
+// ============================================================================
+
+const DEFAULT_SEASONS_FALLBACK = [
+  { season_id: '2026-S18', season_name: '2026 第 18 季', year: 2026, is_current: true, status: 'active' },
+  { season_id: '2026-S17', season_name: '2026 第 17 季', year: 2026, is_current: false, status: 'archived' }
+];
+
+function getNormalizedSeasonsList_() {
+  const raw = Array.isArray(globalData.seasons) && globalData.seasons.length > 0
+    ? globalData.seasons
+    : DEFAULT_SEASONS_FALLBACK;
+
+  return raw.map(s => ({
+    season_id: String(s.season_id || '').trim(),
+    season_name: String(s.season_name || s.season_id || '').trim(),
+    year: Number(s.year || String(s.season_id || '').slice(0, 4) || new Date().getFullYear()),
+    is_current: s.is_current === true || String(s.is_current || '').toUpperCase() === 'TRUE' || String(s.is_current) === '1',
+    status: String(s.status || 'active').trim()
+  })).filter(s => s.season_id);
+}
+
+function getSeasonDisplayName_(seasonId) {
+  const sid = String(seasonId || '').trim();
+  if (!sid) return '—';
+  const found = getNormalizedSeasonsList_().find(s => s.season_id === sid);
+  return found ? `${found.season_name} (${found.season_id})` : sid;
+}
+
+function renderSeasonDropdowns_() {
+  const seasons = getNormalizedSeasonsList_();
+  const isSuper = Boolean(currentUser && currentUser.role === 'super_admin');
+
+  // 1. 頂部球季管理按鈕權限顯示
+  const btnSeasonMgr = document.getElementById('btnOpenSeasonManager');
+  if (btnSeasonMgr) {
+    btnSeasonMgr.classList.toggle('hidden', !isSuper);
+    if (isSuper) btnSeasonMgr.classList.add('flex');
+  }
+
+  // 2. 頂部 Header 球季選單
+  const seasonSelect = document.getElementById('seasonSelect');
+  if (seasonSelect) {
+    const prevVal = currentSeason || seasonSelect.value;
+    seasonSelect.innerHTML = seasons.map(s => {
+      const currentTag = s.is_current ? ' (現行賽季)' : '';
+      return `<option value="${s.season_id}">${s.season_name}${currentTag}</option>`;
+    }).join('');
+
+    if (seasons.some(s => s.season_id === prevVal)) {
+      seasonSelect.value = prevVal;
+    } else {
+      const curSeasonObj = seasons.find(s => s.is_current) || seasons[0];
+      if (curSeasonObj) {
+        currentSeason = curSeasonObj.season_id;
+        seasonSelect.value = currentSeason;
+      }
+    }
+  }
+
+  // 3. 新增球隊 Modal 的「加入球季」選單
+  const newTeamSeasonSel = document.getElementById('newTeamSeason');
+  if (newTeamSeasonSel) {
+    newTeamSeasonSel.innerHTML = seasons.map(s =>
+      `<option value="${s.season_id}">${s.season_name} (${s.season_id})</option>`
+    ).join('');
+    if (seasons.some(s => s.season_id === currentSeason)) {
+      newTeamSeasonSel.value = currentSeason;
+    }
+  }
+}
+
+// --- 聯盟球季管理 Modal ---
+function openSeasonManagerModal() {
+  if (!currentUser || currentUser.role !== 'super_admin') {
+    alert('僅聯盟總管理員可管理球季清單');
+    return;
+  }
+  const seasons = getNormalizedSeasonsList_();
+  const nextNum = seasons.length + 17;
+  const nextYear = new Date().getFullYear() + 1;
+
+  document.getElementById('newSeasonIdInput').value = `${nextYear}-S${nextNum}`;
+  document.getElementById('newSeasonNameInput').value = `${nextYear} 第 ${nextNum} 季`;
+  document.getElementById('newSeasonYearInput').value = nextYear;
+  document.getElementById('newSeasonIsCurrentInput').checked = true;
+  document.getElementById('newSeasonCarryOverTeamsInput').checked = true;
+
+  renderSeasonManagerList_();
+  const modal = document.getElementById('seasonManagerModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function closeSeasonManagerModal() {
+  const modal = document.getElementById('seasonManagerModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+function renderSeasonManagerList_() {
+  const container = document.getElementById('seasonManagerListContainer');
+  if (!container) return;
+  const seasons = getNormalizedSeasonsList_();
+
+  container.innerHTML = seasons.map(s => `
+    <div class="p-3 rounded-xl border ${s.is_current ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white'} flex items-center justify-between gap-2">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-black text-slate-900">${s.season_name}</span>
+          <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold text-[10px]">${s.season_id}</span>
+          ${s.is_current ? '<span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-black text-[10px]">現行賽季</span>' : ''}
+        </div>
+        <div class="text-[11px] text-slate-400 mt-0.5">年度：${s.year}</div>
+      </div>
+      ${!s.is_current ? `
+        <button type="button" onclick="setAsCurrentSeason('${s.season_id}')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-[11px] whitespace-nowrap">
+          設為現行賽季
+        </button>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+async function submitNewSeason() {
+  const seasonId = document.getElementById('newSeasonIdInput').value.trim();
+  const seasonName = document.getElementById('newSeasonNameInput').value.trim();
+  const yearVal = Number(document.getElementById('newSeasonYearInput').value) || new Date().getFullYear();
+  const isCurrent = Boolean(document.getElementById('newSeasonIsCurrentInput').checked);
+  const carryOverTeams = Boolean(document.getElementById('newSeasonCarryOverTeamsInput').checked);
+
+  if (!seasonId || !seasonName) {
+    alert('請填寫球季代碼與球季顯示名稱');
+    return;
+  }
+
+  const res = await BBTApi.saveSeason({
+    season_id: seasonId,
+    season_name: seasonName,
+    year: yearVal,
+    is_current: isCurrent,
+    carry_over_teams: carryOverTeams,
+    from_season: currentSeason
+  });
+
+  if (res && res.result === 'ok') {
+    alert(`✅ 球季「${seasonName} (${seasonId})」已儲存！`);
+    if (isCurrent) currentSeason = seasonId;
+    closeSeasonManagerModal();
+    await initSystem();
+  } else {
+    alert('❌ 新增球季失敗：' + (res && res.message ? res.message : '未知錯誤'));
+  }
+}
+
+async function setAsCurrentSeason(seasonId) {
+  const target = getNormalizedSeasonsList_().find(s => s.season_id === seasonId);
+  if (!target) return;
+  const res = await BBTApi.saveSeason({
+    season_id: target.season_id,
+    season_name: target.season_name,
+    year: target.year,
+    is_current: true,
+    carry_over_teams: false
+  });
+  if (res && res.result === 'ok') {
+    currentSeason = target.season_id;
+    await initSystem();
+    renderSeasonManagerList_();
+  }
+}
+
+// --- 球隊加入球季與各季組別歷史設定 Modal ---
+function openTeamSeasonModal(presetSeason = '') {
+  if (!currentSelectedTeamId) {
+    alert('請先選擇球隊');
+    return;
+  }
+  const team = (globalData.teams || []).find(t => String(t.team_id) === String(currentSelectedTeamId));
+  if (!team) return;
+
+  const seasons = getNormalizedSeasonsList_();
+  const joinedSel = document.getElementById('assignTeamJoinedSeason');
+  const targetSel = document.getElementById('assignTargetSeason');
+
+  const optionsHtml = seasons.map(s =>
+    `<option value="${s.season_id}">${s.season_name} (${s.season_id})</option>`
+  ).join('');
+
+  joinedSel.innerHTML = optionsHtml;
+  targetSel.innerHTML = optionsHtml;
+
+  const defaultJoined = String(team.joined_season || team.season || currentSeason).trim();
+  joinedSel.value = seasons.some(s => s.season_id === defaultJoined) ? defaultJoined : currentSeason;
+
+  const targetSeason = presetSeason || currentSeason;
+  targetSel.value = seasons.some(s => s.season_id === targetSeason) ? targetSeason : currentSeason;
+
+  document.getElementById('teamSeasonModalSub').innerText = `${team.team_name} (${team.team_id})`;
+  onAssignTargetSeasonChange(targetSel.value);
+
+  const modal = document.getElementById('teamSeasonModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function closeTeamSeasonModal() {
+  const modal = document.getElementById('teamSeasonModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+function onAssignTargetSeasonChange(seasonId) {
+  const team = (globalData.teams || []).find(t => String(t.team_id) === String(currentSelectedTeamId));
+  const histList = globalData.team_season_history || [];
+  const matched = histList.find(
+    h => String(h.team_id) === String(currentSelectedTeamId) && String(h.season) === String(seasonId)
+  );
+
+  document.getElementById('assignTargetDivision').value =
+    (matched && matched.division) || (team && team.division) || '大聯盟';
+  document.getElementById('assignSeasonWins').value = matched && matched.wins !== undefined ? matched.wins : '';
+  document.getElementById('assignSeasonLosses').value = matched && matched.losses !== undefined ? matched.losses : '';
+  document.getElementById('assignSeasonTies').value = matched && matched.ties !== undefined ? matched.ties : '';
+  document.getElementById('assignSeasonRankNote').value = (matched && matched.rank_note) || '';
+}
+
+async function submitTeamSeasonAssignment() {
+  if (!currentSelectedTeamId) return;
+  const team = (globalData.teams || []).find(t => String(t.team_id) === String(currentSelectedTeamId));
+  const joinedSeason = document.getElementById('assignTeamJoinedSeason').value;
+  const targetSeason = document.getElementById('assignTargetSeason').value;
+  const targetDivision = document.getElementById('assignTargetDivision').value;
+  const wins = document.getElementById('assignSeasonWins').value;
+  const losses = document.getElementById('assignSeasonLosses').value;
+  const ties = document.getElementById('assignSeasonTies').value;
+  const rankNote = document.getElementById('assignSeasonRankNote').value.trim();
+
+  const res = await BBTApi.saveTeamSeasonAssignment({
+    team_id: currentSelectedTeamId,
+    team_name: team ? team.team_name : '',
+    joined_season: joinedSeason,
+    season: targetSeason,
+    division: targetDivision,
+    wins: wins === '' ? '' : Number(wins),
+    losses: losses === '' ? '' : Number(losses),
+    ties: ties === '' ? '' : Number(ties),
+    rank_note: rankNote
+  });
+
+  if (res && res.result === 'ok') {
+    alert(`✅ 已儲存 ${team ? team.team_name : ''} 的球季與組別歷史設定！`);
+    closeTeamSeasonModal();
+    await initSystem();
+    selectTeam(currentSelectedTeamId);
+  } else {
+    alert('❌ 儲存失敗：' + (res && res.message ? res.message : '未知錯誤'));
+  }
+}
+
+// --- 渲染「歷屆球季與戰績」分頁與球隊上方加入球季徽章 ---
+function renderTeamSeasonHistoryTab() {
+  if (!currentSelectedTeamId) return;
+  const team = (globalData.teams || []).find(t => String(t.team_id) === String(currentSelectedTeamId));
+  const isSuper = Boolean(currentUser && currentUser.role === 'super_admin');
+  const isTeamAdmin = Boolean(
+    currentUser && currentUser.role === 'team_admin' && String(currentUser.team_id) === String(currentSelectedTeamId)
+  );
+  const canEdit = isSuper || isTeamAdmin;
+
+  // 更新球隊標頭「加入球季」徽章與設定按鈕
+  const joinedBadge = document.getElementById('teamJoinedSeasonBadge');
+  if (joinedBadge && team) {
+    const jSeason = team.joined_season || team.season || '—';
+    joinedBadge.innerText = `加入球季：${jSeason}`;
+  }
+  const btnHeaderAssign = document.getElementById('btnTeamSeasonAssign');
+  const btnTabAdd = document.getElementById('btnAddTeamSeasonHistoryRow');
+  if (btnHeaderAssign) btnHeaderAssign.classList.toggle('hidden', !canEdit);
+  if (btnTabAdd) btnTabAdd.classList.toggle('hidden', !canEdit);
+
+  const tbody = document.getElementById('teamSeasonHistoryTableBody');
+  if (!tbody) return;
+
+  const seasons = getNormalizedSeasonsList_();
+  const rawHist = (globalData.team_season_history || []).filter(
+    h => String(h.team_id) === String(currentSelectedTeamId)
+  );
+
+  // 若尚無歷史紀錄，至少顯示現行球季預設列
+  const rows = rawHist.length > 0
+    ? rawHist
+    : (team ? [{
+        season: team.season || currentSeason,
+        team_name: team.team_name,
+        division: team.division || '大聯盟',
+        wins: '',
+        losses: '',
+        ties: '',
+        rank_note: '現行登錄賽季'
+      }] : []);
+
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-slate-400">尚無歷屆球季紀錄</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const sObj = seasons.find(s => s.season_id === String(r.season));
+    const sLabel = sObj ? `${sObj.season_name} (${sObj.season_id})` : r.season;
+    const isJoined = team && String(team.joined_season || '') === String(r.season);
+    const hasRecord = r.wins !== '' && r.wins !== undefined && r.wins !== null;
+    const wltText = hasRecord ? `${r.wins}W - ${r.losses || 0}L - ${r.ties || 0}T` : '—';
+
+    // 計算該季登錄人數
+    const seasonRosterCount = (globalData.roster || []).filter(p =>
+      String(p.team_id) === String(currentSelectedTeamId) &&
+      (!p.season || String(p.season) === String(r.season))
+    ).length;
+
+    return `
+      <tr class="hover:bg-slate-50 transition">
+        <td class="p-3 font-black text-slate-900 whitespace-nowrap">
+          <span>${sLabel}</span>
+          ${isJoined ? '<span class="ml-1.5 px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[10px] font-black">加入首季</span>' : ''}
+        </td>
+        <td class="p-3 font-bold text-slate-700 whitespace-nowrap">${r.team_name || (team ? team.team_name : '—')}</td>
+        <td class="p-3 whitespace-nowrap">
+          <span class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-black text-[11px]">${r.division || '—'}</span>
+        </td>
+        <td class="p-3 font-bold text-slate-800 whitespace-nowrap">${wltText}</td>
+        <td class="p-3 text-slate-600">${r.rank_note || '—'}</td>
+        <td class="p-3 text-center font-black text-emerald-700 whitespace-nowrap">${seasonRosterCount} 人</td>
+        <td class="p-3 text-right whitespace-nowrap">
+          ${canEdit
+            ? `<button type="button" onclick="openTeamSeasonModal('${String(r.season).replace(/'/g, "\\'")}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">編輯</button>`
+            : '<span class="text-slate-300 text-[10px]">—</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
