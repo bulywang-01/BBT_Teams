@@ -79,8 +79,18 @@ async function initSystem() {
       : currentUser;
 
     syncDivisionButtonsUI();
-    renderTeamSidebar(document.getElementById('teamSearchInput')?.value || '');
-    renderOverviewKpiBoard();
+    if (isPersonalOrTeamView_()) {
+      const ownTeamId = getPreferredUserTeamId_();
+      if (ownTeamId) {
+        selectTeam(ownTeamId);
+      } else {
+        renderTeamSidebar('');
+        renderOverviewKpiBoard();
+      }
+    } else {
+      renderTeamSidebar(document.getElementById('teamSearchInput')?.value || '');
+      renderOverviewKpiBoard();
+    }
 
     if (currentSelectedTeamId) {
       await loadRemoteScheduleOptions();
@@ -92,6 +102,72 @@ async function initSystem() {
     alert('無法連線至 Google Sheets 資料庫，請檢查 API 網址或部署權限。');
   }
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// --- 個人登入版面與 Header 精簡輔助 ---
+function isPersonalOrTeamView_() {
+  return Boolean(currentUser && currentUser.role !== 'super_admin');
+}
+
+function getPreferredUserTeamId_() {
+  const uid = String(currentUser?.user_id || '').trim();
+  const utid = String(currentUser?.team_id || '').trim();
+  if (utid && (globalData.teams || []).some(t => String(t.team_id).trim() === utid)) {
+    return utid;
+  }
+  if (uid) {
+    const rMatch = (globalData.roster || []).find(
+      r => String(r.user_id || '').trim() === uid && !isInactiveRosterStatus_(r.status)
+    );
+    if (rMatch && (globalData.teams || []).some(t => String(t.team_id).trim() === String(rMatch.team_id).trim())) {
+      return String(rMatch.team_id).trim();
+    }
+  }
+  return utid;
+}
+
+function syncPersonalHeaderAndLayout_() {
+  const isPersonalView = isPersonalOrTeamView_();
+
+  // 1. 個人登入時精簡上方 Header 組別切換列
+  const divGroup = document.getElementById('divisionSwitchGroup');
+  if (divGroup) {
+    divGroup.classList.toggle('hidden', isPersonalView);
+  }
+
+  // 2. 個人登入時隱藏左側「聯盟球隊清單」側邊欄並讓主區塊撐滿
+  const leftSidebar = document.getElementById('leftTeamSidebar');
+  const mainGrid = leftSidebar ? leftSidebar.parentElement : null;
+  if (leftSidebar) {
+    if (isPersonalView) {
+      leftSidebar.classList.add('hidden');
+      leftSidebar.classList.remove('lg:block');
+      if (mainGrid) {
+        mainGrid.classList.remove('lg:grid-cols-12');
+        mainGrid.classList.add('grid-cols-1');
+      }
+    } else {
+      leftSidebar.classList.remove('lg:block');
+      if (mainGrid) {
+        mainGrid.classList.add('lg:grid-cols-12');
+        mainGrid.classList.remove('grid-cols-1');
+      }
+    }
+  }
+
+  // 3. 個人登入時僅呈現自己球隊內容，隱藏返回總覽按鈕
+  const selectedSection = document.getElementById('selectedTeamSection');
+  if (selectedSection && isPersonalView) {
+    const btns = Array.from(selectedSection.querySelectorAll('button'));
+    btns.forEach(b => {
+      const txt = String(b.textContent || '');
+      if (txt.includes('返回 KPI 總覽') || txt.includes('返回全球隊總覽')) {
+        b.classList.add('hidden');
+      }
+    });
+    const backBar = document.getElementById('mobileBackToTeamsBar');
+    if (backBar) backBar.classList.add('hidden');
+  }
 }
 
 // --- 同步頂部組別按鈕樣式（防止手機換行） ---
@@ -115,6 +191,7 @@ function syncDivisionButtonsUI() {
       btn.className = 'px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700/80 transition whitespace-nowrap shrink-0';
     }
   });
+  syncPersonalHeaderAndLayout_();
 }
 
 // --- 共用隊徽元件（僅圖示 + 備用字） ---
@@ -426,8 +503,8 @@ function refreshLeagueFaCenterContent_(overrideCfg = null) {
         const actionBtns = (isPending && tx.tx_id)
           ? `
             <div class="flex items-center gap-1.5 shrink-0">
-              <button type="button" onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'approved')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] whitespace-nowrap">核准</button>
-              <button type="button" onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'rejected')" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-black text-[11px] whitespace-nowrap">駁回</button>
+              <button type="button" onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\\'")}', 'approved')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] whitespace-nowrap">核准</button>
+              <button type="button" onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\\'")}', 'rejected')" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-black text-[11px] whitespace-nowrap">駁回</button>
             </div>
           `
           : '';
@@ -534,6 +611,7 @@ function renderOverviewKpiBoard() {
   if (hasSelectedTeam) {
     kpiSection.classList.add('hidden');
     selectedSection.classList.remove('hidden');
+    syncPersonalHeaderAndLayout_();
     if (typeof lucide !== 'undefined') lucide.createIcons();
     return;
   }
@@ -1172,6 +1250,7 @@ function selectTeam(teamId) {
   renderAnnouncements();
   renderTransactions(); // <-- 換隊時立刻更新本隊與他隊已核准 FA
   loadRemoteScheduleOptions();
+  syncPersonalHeaderAndLayout_();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1738,7 +1817,7 @@ function renderRosterTable() {
     const pStats = globalData.stats.find(s => String(s.user_id) === String(p.user_id) && String(s.season) === currentSeason);
     const statSummary = pStats ? `AVG .${Math.floor((pStats.h / (pStats.ab || 1)) * 1000)} / HR ${pStats.hr || 0}` : '尚無打擊紀錄';
     const isMe = currentUser && String(p.user_id) === String(currentUser.user_id);
-    const safeRosterId = String(p.roster_id || '').replace(/'/g, "\'");
+    const safeRosterId = String(p.roster_id || '').replace(/'/g, "\\'");
 
     return `
       <tr class="hover:bg-slate-50 transition ${isMe ? 'bg-emerald-50/40' : ''}">
@@ -2272,7 +2351,7 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
-  // 2. 檢查是否於去年（prevYear）已預支「今年（currentYear）」額度 -> 今年額度已用完，今年可提出 0 次（除非再預支明年額度，但每年總上限含預支為 1 次今年額度 + 1 次預支額度）
+  // 2. 檢查是否於去年（prevYear）已預支「今年（currentYear）」額度
   const prevYearTxs = playerFaTxs.filter(tx => getTxYear_(tx) === prevYear);
   const borrowedCurrentYearFromPrevYear = prevYearTxs.some(tx => hasBorrowedNextYearQuota_(tx));
 
@@ -2281,7 +2360,6 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
   const currentYearCount = thisYearTxs.length;
   const borrowedNextYearInThisYear = thisYearTxs.some(tx => hasBorrowedNextYearQuota_(tx));
 
-  // 情況 A：今年尚未提出 FA，且去年未預支今年額度 -> 可使用今年額度（1 次）
   if (currentYearCount === 0 && !borrowedCurrentYearFromPrevYear) {
     return {
       canApply: true,
@@ -2294,7 +2372,6 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
-  // 情況 B：今年尚未提出 FA，但去年已預支今年額度 -> 今年一般額度已用掉，但仍可預支明年（nextYear）額度於今年再提 1 次（提出後明年 nextYear 不能提 FA）
   if (currentYearCount === 0 && borrowedCurrentYearFromPrevYear) {
     return {
       canApply: true,
@@ -2307,7 +2384,6 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
-  // 情況 C：今年已提出 1 次且尚未預支明年額度 -> 可使用今年/明年額度於今年再提第 2 次（若本次預支明年額度，明年 nextYear 不能提 FA）
   if (currentYearCount === 1 && !borrowedNextYearInThisYear) {
     return {
       canApply: true,
@@ -2320,7 +2396,6 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
-  // 情況 D：今年已提出 >= 2 次，或今年已預支明年額度 -> 今年額度已用罄，且明年額度已被使用
   const reasonText = borrowedNextYearInThisYear
     ? `${currentYear} 年度額度及 ${nextYear} 年度預支額度皆已使用（${nextYear} 年不能再提 FA）`
     : `${currentYear} 年度 FA 額度已達上限`;
@@ -2454,19 +2529,16 @@ function renderTransactions() {
 
   renderFaGuideBanner_(isSuper);
 
-  // 非聯盟總管理員時，僅球員本人可提出 FA（球隊端僅顯示提出名單與狀態，不提供球隊自行審核）
   const btnFaApply = document.querySelector('button[onclick="openFaApplyModal()"]');
   if (btnFaApply) {
     const isPlayerSelf = Boolean(currentUser && currentUser.role === 'player');
     btnFaApply.classList.toggle('hidden', !isSuper && !isPlayerSelf);
   }
 
-  // 1. 本隊提出／相關 FA 名單（球隊頁面僅顯示有誰提出與審核狀態，非聯盟管理員不顯示核准/駁回操作）
   const myTeamFaList = allTxs.filter(
     tx => isFaRecord_(tx) && isMyTeamTx_(tx, currentTeam)
   );
 
-  // 2. 他隊已審核通過 FA
   const otherApprovedFaList = allTxs.filter(
     tx => isFaRecord_(tx) && !isMyTeamTx_(tx, currentTeam) && isApprovedStatus_(tx.admin_status)
   );
@@ -2479,12 +2551,11 @@ function renderTransactions() {
       ? 'bg-emerald-100 text-emerald-800'
       : (pending ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800');
 
-    // 僅聯盟總管理員（super_admin）可進行 FA 審核
     const reviewActionsHtml = (allowLeagueReview && pending && tx.tx_id)
       ? `
         <div class="mt-1.5 flex items-center justify-end gap-1">
-          <button onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'approved')" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black whitespace-nowrap">聯盟核准</button>
-          <button onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'rejected')" class="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-black whitespace-nowrap">聯盟駁回</button>
+          <button onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\\'")}', 'approved')" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black whitespace-nowrap">聯盟核准</button>
+          <button onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\\'")}', 'rejected')" class="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-black whitespace-nowrap">聯盟駁回</button>
         </div>
       `
       : '';
@@ -2502,7 +2573,7 @@ function renderTransactions() {
           ${modeBadge}
         </td>
         <td class="p-3 whitespace-nowrap">
-          <button type="button" onclick="openPlayerCard('${String(tx.user_id || '').replace(/'/g, "\'")}') " class="font-black text-bbt-navy hover:text-emerald-600 underline decoration-emerald-400 decoration-2 underline-offset-4 flex items-center gap-1 whitespace-nowrap">
+          <button type="button" onclick="openPlayerCard('${String(tx.user_id || '').replace(/'/g, "\\'")}')" class="font-black text-bbt-navy hover:text-emerald-600 underline decoration-emerald-400 decoration-2 underline-offset-4 flex items-center gap-1 whitespace-nowrap">
             <span>${formatTxPlayerName_(tx)}</span>
             <i data-lucide="id-card" class="w-3.5 h-3.5 text-emerald-600 shrink-0"></i>
           </button>
