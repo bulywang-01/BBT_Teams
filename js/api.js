@@ -1,13 +1,28 @@
 // ============================================================================
 // BBT 軟式棒球聯盟 - 全新站點 API 服務模組 (api.js)
+// 整合帳號登入、Session Token 夾帶、個人資料維護與權限指派
 // ============================================================================
 
-const API_BASE_URL = "https://script.google.com/macros/s/AKfycbzuiDAxjUJxslGOa3r76qVL2MSF7757-3QiGKLrM8EXaXq6dYY-Gb9o1Esl9XfnKuUVTQ/exec";
+const API_BASE_URL = "https://script.google.com/macros/s/AKfycbwnFx5uJcFrcD17QeRwQEElknJ9e3gHIuM2C-sxb9C7ndjbD2y5ceGJMK4ot9Ytb78C7Q/exec";
+const AUTH_SESSION_STORAGE_KEY = 'bbt_auth_session';
+
+function getStoredAuthToken_() {
+  try {
+    const raw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    return (parsed && parsed.token) ? String(parsed.token) : '';
+  } catch (e) {
+    return '';
+  }
+}
 
 async function callApi(action, data = {}) {
   try {
+    const token = getStoredAuthToken_();
     const payload = {
       action: action,
+      ...(token ? { token: token } : {}),
       ...data
     };
 
@@ -33,6 +48,55 @@ async function callApi(action, data = {}) {
 }
 
 const BBTApi = {
+  // --- Session 管理輔助 ---
+  setSession(sessionObj) {
+    if (!sessionObj) {
+      localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(sessionObj));
+  },
+
+  getSession() {
+    try {
+      const raw = localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  clearSession() {
+    localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+  },
+
+  // --- 帳號登入、登出、個人資料與權限 ---
+  async login(account, password) {
+    const res = await callApi('login', { account: account, password: password });
+    if (res && res.result === 'ok' && res.token) {
+      this.setSession({
+        token: res.token,
+        user: res.user
+      });
+    }
+    return res;
+  },
+
+  async logout() {
+    const res = await callApi('logout', {});
+    this.clearSession();
+    return res;
+  },
+
+  async updateSelfProfile(profileData) {
+    return await callApi('updateSelfProfile', { data: JSON.stringify(profileData) });
+  },
+
+  async assignUserRole(rolePayload) {
+    return await callApi('assignUserRole', rolePayload);
+  },
+
+  // --- 球隊與賽事系統 ---
   async getInitData(season = '', teamId = '') {
     return await callApi('getTeamSystemInitData', { season, team_id: teamId });
   },
@@ -77,7 +141,7 @@ const BBTApi = {
     return await callApi('approvePlayerTransaction', { tx_id: txId, admin_status: status });
   },
 
-  // 🌟 新增：跨表遠端讀取共用賽事表
+  // 🌟 跨表遠端讀取共用賽事表
   async getRemoteSchedule(scheduleSheetId, sheetName = 'Schedule') {
     return await callApi('getRemoteSchedule', { schedule_sheet_id: scheduleSheetId, sheet_name: sheetName });
   }
