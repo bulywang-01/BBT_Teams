@@ -3397,7 +3397,7 @@ function startEditSeason_(seasonId) {
   if (curInput) curInput.checked = Boolean(s.is_current);
 }
 
-function openSeasonManagerModal() {
+async function openSeasonManagerModal() {
   if (!currentUser || currentUser.role !== 'super_admin') {
     alert('僅聯盟總管理員可管理球季清單');
     return;
@@ -3410,6 +3410,19 @@ function openSeasonManagerModal() {
   modal.classList.remove('hidden');
   modal.classList.add('flex');
   if (typeof lucide !== 'undefined') lucide.createIcons();
+
+  if (typeof BBTApi !== 'undefined' && typeof BBTApi.getInitData === 'function') {
+    const freshRes = await BBTApi.getInitData(currentSeason, currentSelectedTeamId || '');
+    if (freshRes && freshRes.result === 'ok') {
+      if (Array.isArray(freshRes.seasons) && freshRes.seasons.length > 0) {
+        globalData.seasons = freshRes.seasons;
+        window.globalData = globalData;
+        renderSeasonDropdowns_();
+        renderSeasonManagerList_();
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      }
+    }
+  }
 }
 
 function closeSeasonManagerModal() {
@@ -3423,7 +3436,18 @@ function closeSeasonManagerModal() {
 function renderSeasonManagerList_() {
   const container = document.getElementById('seasonManagerListContainer');
   if (!container) return;
-  const seasons = getNormalizedSeasonsList_();
+  const rawSeasons = getNormalizedSeasonsList_();
+  const dedupMap = new Map();
+  rawSeasons.forEach(s => {
+    const key = String(s.season_id || '').trim();
+    if (!key) return;
+    if (!dedupMap.has(key)) {
+      dedupMap.set(key, s);
+    } else {
+      dedupMap.set(key, { ...dedupMap.get(key), ...s });
+    }
+  });
+  const seasons = Array.from(dedupMap.values());
 
   container.innerHTML = seasons.map(s => `
     <div class="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-2">
