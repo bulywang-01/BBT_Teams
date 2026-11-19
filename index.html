@@ -1356,30 +1356,52 @@
       document.getElementById('enrollExistingModal').classList.remove('flex');
     }
 
+    function isSystemAdminAccount(userObj = {}) {
+      const roleOverrides = JSON.parse(localStorage.getItem(BBTAuth.ROLE_OVERRIDE_KEY) || '{}');
+      const uid = String(userObj.user_id || '').trim();
+      const account = String(userObj.account || '').trim().toLowerCase();
+      const globalRole = String(userObj.global_role || '').trim().toLowerCase();
+      const role = String(userObj.role || roleOverrides[uid] || '').trim().toLowerCase();
+    
+      return (
+        globalRole === 'super_admin' ||
+        role === 'super_admin' ||
+        account === 'bbtadmin'
+      );
+    }
+    
     function renderAvailableUsersForEnrollment(selectId, teamId) {
       const selectEl = document.getElementById(selectId);
       if (!selectEl) return;
-
+    
       const allUsers = globalData.users || [];
       const teamRoster = (globalData.roster || []).filter(r => String(r.team_id) === String(teamId));
       const enrolledIds = new Set(teamRoster.map(r => String(r.user_id).trim()));
-
+    
       const candidates = allUsers.filter(u => {
         const uid = String(u.user_id || '').trim();
         if (!uid || enrolledIds.has(uid)) return false;
-        const active = u.is_active === true || String(u.is_active).toUpperCase() === 'TRUE' || String(u.is_active) === '1';
+        if (isSystemAdminAccount(u)) return false;
+    
+        const active =
+          u.is_active === true ||
+          u.is_active === undefined ||
+          String(u.is_active).toUpperCase() === 'TRUE' ||
+          String(u.is_active) === '1';
         return active;
       });
-
+    
       if (candidates.length === 0) {
         selectEl.innerHTML = `<option value="">-- 目前無可登錄的已建帳號 --</option>`;
         return;
       }
-
-      selectEl.innerHTML = `<option value="">-- 請選擇已建帳號 --</option>` + candidates.map(u => {
-        const nameLabel = u.player_name || u.account || u.user_id;
-        return `<option value="${u.user_id}">${nameLabel} (${u.user_id} / 帳號: ${u.account})</option>`;
-      }).join('');
+    
+      selectEl.innerHTML =
+        `<option value="">-- 請選擇已建帳號 --</option>` +
+        candidates.map(u => {
+          const nameLabel = u.player_name || u.account || u.user_id;
+          return `<option value="${u.user_id}">${nameLabel} (${u.user_id} / 帳號: ${u.account})</option>`;
+        }).join('');
     }
 
     async function enrollExistingUserToTeam() {
