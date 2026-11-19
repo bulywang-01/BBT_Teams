@@ -517,6 +517,7 @@ function saveLeagueFaWindowSetting() {
     label: `${currentSeason} 年度 FA 申請期間`
   };
   saveFaWindowConfig_(nextCfg);
+  syncFaWindowUiImmediately_(nextCfg);
   refreshLeagueFaCenterContent_(nextCfg);
   renderOverviewKpiBoard();
   alert('✅ 已儲存年度 FA 申請開關與期間設定！');
@@ -1858,15 +1859,15 @@ function ensureFaReviewModal_() {
   modal.id = 'faReviewModal';
   modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-3';
   modal.innerHTML = `
-    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-      <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+      <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
         <div class="font-black text-sm flex items-center gap-1.5 whitespace-nowrap">
           <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
           <span id="faReviewModalTitle">FA 資格審查</span>
         </div>
         <button onclick="closeFaReviewModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 whitespace-nowrap">✕</button>
       </div>
-      <div class="p-4 space-y-3 text-xs">
+      <div class="p-4 space-y-3 text-xs overflow-y-auto">
         <div id="faReviewSummaryBox" class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1 text-slate-700"></div>
         <div>
           <label class="block font-bold text-slate-700 mb-1">審查決定</label>
@@ -1875,22 +1876,69 @@ function ensureFaReviewModal_() {
             <button type="button" id="btnFaDecisionReject" onclick="setFaReviewDecision('rejected')" class="py-2 px-3 rounded-xl font-black border transition whitespace-nowrap">✕ 駁回申請</button>
           </div>
         </div>
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">審查備註（選填）</label>
-          <input id="faReviewNoteInput" type="text" placeholder="例如：符合出賽門檻，准予登錄 FA 市場" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-emerald-500">
+        <div id="faTargetTeamSection" class="space-y-1">
+          <label class="block font-bold text-slate-700">確定 FA 目標球隊（核准時選擇）</label>
+          <select id="faTargetTeamSelect" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 text-xs focus:outline-none focus:border-emerald-500"></select>
+        </div>
+        <div class="space-y-1.5">
+          <label class="block font-bold text-slate-700">審查備註</label>
+          <select id="faReviewNoteOptionSelect" onchange="handleFaReviewNoteOptionChange()" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800 text-xs focus:outline-none focus:border-emerald-500">
+            <option value="依球員確定的球隊">a. 依球員確定的球隊</option>
+            <option value="聯盟配對的球隊">b. 聯盟配對的球隊</option>
+            <option value="其它">c. 其它</option>
+          </select>
+          <div id="faReviewCustomNoteWrap" class="hidden pt-1">
+            <input id="faReviewCustomNoteInput" type="text" placeholder="請輸入其他審查備註內容..." class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-emerald-500">
+          </div>
         </div>
         <label id="faPublishAnnWrap" class="flex items-center gap-2 pt-1 cursor-pointer select-none">
           <input id="faPublishAnnCheckbox" type="checkbox" checked class="w-4 h-4 rounded text-emerald-600 border-slate-300">
           <span class="font-bold text-slate-700">核准後自動發布聯盟 FA 公告</span>
         </label>
       </div>
-      <div class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+      <div class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
         <button type="button" onclick="closeFaReviewModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 whitespace-nowrap">取消</button>
         <button type="button" id="btnConfirmFaReview" onclick="submitFaReviewDecision()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm whitespace-nowrap">確認送出</button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
+}
+
+function handleFaReviewNoteOptionChange() {
+  const optVal = document.getElementById('faReviewNoteOptionSelect')?.value || '';
+  const customWrap = document.getElementById('faReviewCustomNoteWrap');
+  const customInput = document.getElementById('faReviewCustomNoteInput');
+  if (!customWrap) return;
+  if (optVal === '其它') {
+    customWrap.classList.remove('hidden');
+    if (customInput) customInput.focus();
+  } else {
+    customWrap.classList.add('hidden');
+  }
+}
+
+function populateFaTargetTeamSelect_(tx) {
+  const sel = document.getElementById('faTargetTeamSelect');
+  if (!sel) return;
+  const teams = globalData.teams || [];
+  const fromTeamId = String(tx?.from_team_id || '').trim();
+  const noteText = String(tx?.note || '').trim();
+
+  let matchedTeamId = String(tx?.to_team_id || '').trim();
+  if (!matchedTeamId || ['FA_MARKET', 'LEAGUE_MATCH'].includes(matchedTeamId.toUpperCase())) {
+    const foundByName = teams.find(t => t.team_name && noteText.includes(String(t.team_name).trim()));
+    matchedTeamId = foundByName ? String(foundByName.team_id).trim() : '';
+  }
+
+  sel.innerHTML =
+    `<option value="">-- 請選擇球員確定轉入的 FA 球隊 --</option>` +
+    teams.map(t => {
+      const tid = String(t.team_id || '').trim();
+      const isSameAsOrigin = fromTeamId && tid === fromTeamId;
+      const divLabel = t.division ? ` (${t.division})` : '';
+      return `<option value="${tid}" ${tid === matchedTeamId ? 'selected' : ''}>${t.team_name}${divLabel}${isSameAsOrigin ? ' · 原隊' : ''}</option>`;
+    }).join('');
 }
 
 function setFaReviewDecision(decision) {
@@ -1901,15 +1949,18 @@ function setFaReviewDecision(decision) {
   const approveBtn = document.getElementById('btnFaDecisionApprove');
   const rejectBtn = document.getElementById('btnFaDecisionReject');
   const publishWrap = document.getElementById('faPublishAnnWrap');
+  const targetTeamSec = document.getElementById('faTargetTeamSection');
 
   if (decision === 'approved') {
     approveBtn.className = 'py-2 px-3 rounded-xl font-black border border-emerald-600 bg-emerald-600 text-white transition whitespace-nowrap';
     rejectBtn.className = 'py-2 px-3 rounded-xl font-black border border-slate-200 bg-white text-slate-600 hover:bg-rose-50 transition whitespace-nowrap';
     if (publishWrap) publishWrap.classList.remove('hidden');
+    if (targetTeamSec) targetTeamSec.classList.remove('hidden');
   } else {
     rejectBtn.className = 'py-2 px-3 rounded-xl font-black border border-rose-600 bg-rose-600 text-white transition whitespace-nowrap';
     approveBtn.className = 'py-2 px-3 rounded-xl font-black border border-slate-200 bg-white text-slate-600 hover:bg-emerald-50 transition whitespace-nowrap';
     if (publishWrap) publishWrap.classList.add('hidden');
+    if (targetTeamSec) targetTeamSec.classList.add('hidden');
   }
 }
 
@@ -1942,7 +1993,21 @@ function openFaReviewModal(txId, defaultDecision = 'approved') {
     <div class="text-slate-600">申請說明：${tx.note || '—'}</div>
   `;
 
-  document.getElementById('faReviewNoteInput').value = '';
+  populateFaTargetTeamSelect_(tx);
+
+  const noteSelect = document.getElementById('faReviewNoteOptionSelect');
+  const customInput = document.getElementById('faReviewCustomNoteInput');
+  if (noteSelect) {
+    const rawNote = String(tx.note || '');
+    if (rawNote.includes('配對')) {
+      noteSelect.value = '聯盟配對的球隊';
+    } else {
+      noteSelect.value = '依球員確定的球隊';
+    }
+  }
+  if (customInput) customInput.value = '';
+  handleFaReviewNoteOptionChange();
+
   document.getElementById('faPublishAnnCheckbox').checked = true;
   setFaReviewDecision(defaultDecision);
 
@@ -1965,7 +2030,26 @@ async function submitFaReviewDecision() {
   if (!pendingReviewTxCache || !modal) return;
 
   const decision = modal.dataset.decision || 'approved';
-  const reviewNote = document.getElementById('faReviewNoteInput')?.value.trim() || '';
+  const noteOpt = document.getElementById('faReviewNoteOptionSelect')?.value || '依球員確定的球隊';
+  const customNote = String(document.getElementById('faReviewCustomNoteInput')?.value || '').trim();
+  const targetTeamId = String(document.getElementById('faTargetTeamSelect')?.value || '').trim();
+  const targetTeamObj = (globalData.teams || []).find(t => String(t.team_id).trim() === targetTeamId);
+  const targetTeamName = targetTeamObj ? targetTeamObj.team_name : '';
+
+  if (decision === 'approved' && !targetTeamId) {
+    alert('核准 FA 時請先選擇球員確定要轉入的球隊');
+    return;
+  }
+
+  if (noteOpt === '其它' && !customNote) {
+    alert('選擇「其它」時請填寫備註內容');
+    return;
+  }
+
+  const reviewNote = noteOpt === '其它'
+    ? `其它：${customNote}`
+    : (decision === 'approved' && targetTeamName ? `${noteOpt}（${targetTeamName}）` : noteOpt);
+
   const publishAnnouncement = Boolean(document.getElementById('faPublishAnnCheckbox')?.checked);
 
   const submitBtn = document.getElementById('btnConfirmFaReview');
@@ -1976,13 +2060,14 @@ async function submitFaReviewDecision() {
       tx_id: pendingReviewTxCache.tx_id,
       decision: decision,
       admin_status: decision,
+      ...(decision === 'approved' ? { to_team_id: targetTeamId, to_team_name: targetTeamName } : {}),
       review_note: reviewNote,
       publish_announcement: decision === 'approved' && publishAnnouncement
     });
 
     if (res && res.result === 'ok') {
       alert(decision === 'approved'
-        ? '✅ 已核准 FA 申請並同步更新狀態／公告！'
+        ? `✅ 已核准 FA 申請（確定轉入：${targetTeamName || targetTeamId}）！`
         : '✅ 已駁回該筆 FA 申請！');
       closeFaReviewModal();
       await initSystem();
