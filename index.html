@@ -65,19 +65,26 @@
           </div>
         </div>
 
-        <div class="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700">
-          <button onclick="switchRoleMode('admin')" id="mode-admin" class="px-3 py-1 rounded-lg text-xs font-black bg-emerald-600 text-white shadow transition">聯盟管理員視角</button>
-          <button onclick="switchRoleMode('captain')" id="mode-captain" class="px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition">隊長登入視角</button>
-        </div>
+        <!-- 右側使用者資訊與操作按鈕 -->
+        <div class="flex items-center space-x-2 sm:space-x-3">
+          <button id="btnOpenSelfProfile" onclick="openSelfProfileModal()" class="hidden bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-bold px-3 py-1.5 rounded-xl transition border border-slate-700 items-center space-x-1.5">
+            <i data-lucide="user-cog" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">個人資料</span>
+          </button>
 
-        <div class="flex items-center space-x-3">
-          <div class="text-right hidden sm:block">
-            <div id="userNameDisplay" class="text-xs font-black text-white">王韶文</div>
-            <div id="userTitleDisplay" class="text-[10px] font-bold text-amber-400">最高賽務審核員</div>
+          <button id="btnOpenAdminRoleMgr" onclick="openAdminRoleModal()" class="hidden bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-bold px-3 py-1.5 rounded-xl transition border border-amber-500/40 items-center space-x-1.5">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+            <span class="hidden md:inline">權限指派</span>
+          </button>
+
+          <div class="text-right">
+            <div id="userNameDisplay" class="text-xs font-black text-white">未登入</div>
+            <div id="userTitleDisplay" class="text-[10px] font-bold text-amber-400">請先登入系統</div>
           </div>
-          <button class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-xl transition border border-slate-700 flex items-center space-x-1">
-            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
-            <span class="hidden sm:inline">登出</span>
+
+          <button id="btnAuthAction" onclick="handleAuthButtonClick()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition shadow flex items-center space-x-1">
+            <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+            <span id="btnAuthText">登入</span>
           </button>
         </div>
       </div>
@@ -87,7 +94,7 @@
   <!-- 2. 主要內容區 -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5 flex-grow w-full">
 
-    <!-- 頂部篩選列 -->
+    <!-- 頂部篩選列 (僅總管理員可切換分組，球隊管理員與球員僅顯示年度與重新載入) -->
     <div id="adminFilterBar" class="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-center space-x-2">
@@ -98,12 +105,13 @@
           </select>
         </div>
 
-        <div class="h-4 w-px bg-slate-300 hidden sm:block"></div>
-
-        <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
-          <button onclick="switchDiv('大聯盟')" id="btn-maj" class="px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition">大聯盟組</button>
-          <button onclick="switchDiv('小聯盟')" id="btn-min" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">小聯盟組</button>
-          <button onclick="switchDiv('育成組')" id="btn-rok" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">育成組</button>
+        <div id="divisionFilterGroup" class="flex items-center gap-3">
+          <div class="h-4 w-px bg-slate-300 hidden sm:block"></div>
+          <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
+            <button onclick="switchDiv('大聯盟')" id="btn-maj" class="px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition">大聯盟組</button>
+            <button onclick="switchDiv('小聯盟')" id="btn-min" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">小聯盟組</button>
+            <button onclick="switchDiv('育成組')" id="btn-rok" class="px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition">育成組</button>
+          </div>
         </div>
       </div>
 
@@ -122,7 +130,7 @@
     <!-- 雙欄主體 -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
-      <!-- 左欄：球隊清單 -->
+      <!-- 左欄：球隊清單 (僅總管理員可見；球隊管理員與球員自動隱藏並由右欄佔滿 12 欄) -->
       <div id="leftTeamSidebar" class="lg:col-span-4 space-y-4">
         <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3">
           <div class="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -165,7 +173,7 @@
             </div>
 
             <div class="flex items-center space-x-2 shrink-0">
-              <button onclick="openTeamProfileModal()" class="bg-bbt-navy hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
+              <button id="btnTeamProfileEdit" onclick="openTeamProfileModal()" class="bg-bbt-navy hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
                 <i data-lucide="image" class="w-3.5 h-3.5 text-amber-400"></i>
                 <span>隊服與介紹維護</span>
               </button>
@@ -255,16 +263,16 @@
                 <div class="flex items-center space-x-2">
                   <span class="bg-emerald-500 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded uppercase">出賽管理模組</span>
                 </div>
-                <h4 class="text-base font-black mt-1">球員出席回報與請假管理控制台</h4>
+                <h4 id="attendanceHeaderTitle" class="text-base font-black mt-1">球員出席回報與請假管理控制台</h4>
               </div>
               <div class="flex items-center space-x-2">
-                <button onclick="openBatchAttendanceModal()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
+                <button id="btnBatchAttendance" onclick="openBatchAttendanceModal()" class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
                   <i data-lucide="check-square" class="w-4 h-4"></i>
                   <span>⚡ 批次點名</span>
                 </button>
-                <button onclick="openAttendanceModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
+                <button id="btnSingleAttendance" onclick="openAttendanceModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow flex items-center space-x-1.5">
                   <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                  <span>+ 單筆回報</span>
+                  <span id="btnSingleAttendanceText">+ 單筆回報</span>
                 </button>
               </div>
             </div>
@@ -329,7 +337,7 @@
               <div class="flex space-x-1.5">
                 <span class="bg-slate-800 text-white text-xs font-bold px-3 py-1 rounded-lg">隊內佈告欄</span>
               </div>
-              <button onclick="openAnnouncementModal()" class="bg-bbt-navy hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow flex items-center space-x-1.5">
+              <button id="btnNewAnnouncement" onclick="openAnnouncementModal()" class="bg-bbt-navy hover:bg-slate-800 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow flex items-center space-x-1.5">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                 <span>+ 發布隊內公告</span>
               </button>
@@ -356,7 +364,7 @@
                   <span>前往 BBT FA 專區</span>
                   <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
                 </a>
-                <button onclick="openFaApplyModal()" class="bg-bbt-navy text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow">
+                <button id="btnFaApply" onclick="openFaApplyModal()" class="bg-bbt-navy text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow">
                   + 宣告 FA 資格
                 </button>
               </div>
@@ -385,6 +393,130 @@
       </div>
     </div>
   </main>
+
+  <!-- ================= MODAL 0: 帳號登入視窗 ================= -->
+  <div id="loginModal" class="fixed inset-0 bg-slate-900/85 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl border border-slate-200">
+      <div class="bg-bbt-navy p-6 text-white text-center space-y-2">
+        <div class="w-12 h-12 mx-auto rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center">
+          <img src="bbtlogo.png" alt="BBT" class="h-8 w-auto object-contain">
+        </div>
+        <h3 class="text-lg font-black tracking-wide">BBT 聯盟帳號登入</h3>
+        <p class="text-xs text-slate-400">請輸入您的球員／教練帳號與密碼</p>
+      </div>
+
+      <form onsubmit="submitLogin(event)" class="p-6 space-y-4 text-xs">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">登入帳號 / 球員代號 (User ID)</label>
+          <input type="text" id="loginAccountInput" required placeholder="例如：admin 或 U1024" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 font-bold text-slate-800 focus:outline-none focus:border-emerald-500">
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">登入密碼</label>
+          <input type="password" id="loginPasswordInput" required placeholder="請輸入密碼" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 font-bold text-slate-800 focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div id="loginErrorMsg" class="hidden text-rose-600 bg-rose-50 border border-rose-200 rounded-xl p-2.5 font-bold text-[11px]"></div>
+
+        <button type="submit" id="btnSubmitLogin" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl shadow transition text-sm">
+          登入系統
+        </button>
+
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-500 space-y-1">
+          <div class="font-black text-slate-700">💡 系統角色權限說明：</div>
+          <div>• <strong>總管理員</strong>：預設帳號 <code class="bg-slate-200 px-1 rounded">admin</code> / 密碼 <code class="bg-slate-200 px-1 rounded">1234</code></div>
+          <div>• <strong>球隊管理員 / 球員</strong>：使用登錄之帳號或球員代號登入（預設密碼 <code class="bg-slate-200 px-1 rounded">1234</code>）</div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 0.5: 個人資料編輯 (球員/教練自行維護) ================= -->
+  <div id="selfProfileModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-black text-base text-slate-900">我的個人資料與帳號設定</h3>
+          <p class="text-[11px] text-slate-500">可自行維護守備位置、投打習慣與登入密碼</p>
+        </div>
+        <button onclick="closeSelfProfileModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-500 block mb-1">球員姓名 (鎖定)</label>
+            <input type="text" id="selfName" disabled class="w-full border border-slate-200 bg-slate-100 text-slate-500 rounded-xl px-3 py-2 font-bold">
+          </div>
+          <div>
+            <label class="font-bold text-slate-500 block mb-1">登錄背號 (由球隊管理員維護)</label>
+            <input type="text" id="selfNumber" disabled class="w-full border border-slate-200 bg-slate-100 text-slate-500 rounded-xl px-3 py-2 font-bold">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">主要守備位置</label>
+            <input type="text" id="selfPosition" placeholder="例如：SS / 2B" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">投打習慣</label>
+            <select id="selfBatThrow" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+              <option value="右投右打">右投右打</option>
+              <option value="右投左打">右投左打</option>
+              <option value="左投左打">左投左打</option>
+              <option value="左投右打">左投右打</option>
+              <option value="右投兩打">右投兩打</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">聯絡電話 / LINE 聯絡方式</label>
+          <input type="text" id="selfPhone" placeholder="請輸入聯絡電話" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">變更登入密碼 (不修改請留空)</label>
+          <input type="password" id="selfNewPassword" placeholder="輸入新密碼" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+        </div>
+      </div>
+      <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="closeSelfProfileModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100">取消</button>
+        <button onclick="saveSelfProfile()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow">儲存個人資料</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 0.8: 總管理員權限指派視窗 ================= -->
+  <div id="adminRoleModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-black text-base text-slate-900">聯盟帳號與球隊管理員指派</h3>
+          <p class="text-[11px] text-slate-500">將球員、領隊或總教練設定為該隊管理員或總管理員</p>
+        </div>
+        <button onclick="closeAdminRoleModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">選擇目標球隊</label>
+          <select id="roleMgrTeamSelect" onchange="populateRoleMgrPlayerSelect()" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white"></select>
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">選擇人員 (球員 / 教練 / 領隊)</label>
+          <select id="roleMgrUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white"></select>
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">指派系統權限層級</label>
+          <select id="roleMgrLevelSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+            <option value="player">一般球員 / 隊員 (檢視球隊資料、自助請假、編輯個人資料)</option>
+            <option value="team_admin">球隊管理員 (可管理該隊點名、公告、隊服介紹、FA宣告)</option>
+            <option value="super_admin">聯盟總管理員 (擁有全聯盟最高管理與跨隊權限)</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="closeAdminRoleModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100">關閉</button>
+        <button onclick="saveAssignedUserRole()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-amber-600 hover:bg-amber-700 shadow">儲存權限設定</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ================= MODAL 1: 中職球員卡 ================= -->
   <div id="playerCardModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
@@ -457,9 +589,14 @@
         </div>
 
         <div class="pt-2 flex justify-between items-center border-t border-slate-100">
-          <a href="https://bbtls.com/fa.php" target="_blank" class="text-xs font-bold text-amber-600 hover:underline flex items-center gap-1">
-            <i data-lucide="file-check" class="w-3.5 h-3.5"></i> 查詢 FA 資格狀態
-          </a>
+          <div class="flex items-center space-x-3">
+            <a href="https://bbtls.com/fa.php" target="_blank" class="text-xs font-bold text-amber-600 hover:underline flex items-center gap-1">
+              <i data-lucide="file-check" class="w-3.5 h-3.5"></i> 查詢 FA 資格
+            </a>
+            <button id="btnCardEditSelf" onclick="closePlayerCard(); openSelfProfileModal();" class="hidden text-xs font-bold text-emerald-600 hover:underline items-center gap-1">
+              <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> 編輯我的資料
+            </button>
+          </div>
           <button onclick="closePlayerCard()" class="bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-xl">關閉</button>
         </div>
       </div>
@@ -507,7 +644,7 @@
         </div>
         
         <div>
-          <label class="font-bold text-slate-700 block mb-1">選擇球員 (免輸代號)</label>
+          <label class="font-bold text-slate-700 block mb-1">選擇球員</label>
           <select id="attUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed">
             <option value="">-- 請先選擇球隊或載入球員 --</option>
           </select>
@@ -609,11 +746,11 @@
         <button onclick="closeFaApplyModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <div class="space-y-3 text-xs">
-        <p class="text-slate-500">依據聯盟 FA 規範，請選擇您的球員身分並套用或自訂符合條件：</p>
+        <p class="text-slate-500">依據聯盟 FA 規範，請選擇球員身分並套用或自訂符合條件：</p>
         
         <div>
-          <label class="font-bold text-slate-700 block mb-1">選擇球員 (免輸代號)</label>
-          <select id="faUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+          <label class="font-bold text-slate-700 block mb-1">選擇球員</label>
+          <select id="faUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white disabled:bg-slate-100 disabled:text-slate-600">
             <option value="">-- 請選擇球員 --</option>
           </select>
         </div>
@@ -648,9 +785,15 @@
     let currentSeason = '2026-S18';
     let currentRosterFilter = 'all';
     let activePlayerCardCache = null;
+    let activeCardUserId = '';
     let globalGameCache = {};
 
+    // 🌟 目前登入使用者狀態：{ user_id, name, role: 'super_admin' | 'team_admin' | 'player', team_id, title }
+    let currentUser = null;
+
     const REMOTE_SCHEDULE_SHEET_ID = '1kgJti-vuALVDPhVWHdb0G5_Ows4Usp61Y00L9JMrrmw';
+    const AUTH_STORAGE_KEY = 'bbt_current_user_session';
+    const ROLE_OVERRIDE_KEY = 'bbt_role_overrides'; // 暫存總管理員指派的角色對應
 
     document.addEventListener('DOMContentLoaded', async () => {
       await initSystem();
@@ -666,23 +809,367 @@
         globalData.transactions = res.transactions || [];
         globalData.attendance = res.attendance || [];
 
-        renderTeamSidebar();
+        // 讀取先前登入的 Session
+        restoreSession();
+
+        if (!currentUser) {
+          openLoginModal();
+          renderTeamSidebar();
+          return;
+        }
+
+        applyRolePermissions();
+        await loadRemoteScheduleOptions();
         renderAnnouncements();
         renderTransactions();
-        
-        await loadRemoteScheduleOptions();
+      } else {
+        alert('無法連線至 Google Sheets 資料庫，請檢查 API 網址或部署權限。');
+      }
+      lucide.createIcons();
+    }
 
+    // ================= 登入與權限控制模組 =================
+    function restoreSession() {
+      try {
+        const saved = localStorage.getItem(AUTH_STORAGE_KEY);
+        if (saved) {
+          currentUser = JSON.parse(saved);
+        }
+      } catch (e) {
+        currentUser = null;
+      }
+    }
+
+    function openLoginModal() {
+      document.getElementById('loginErrorMsg').classList.add('hidden');
+      document.getElementById('loginModal').classList.remove('hidden');
+      document.getElementById('loginModal').classList.add('flex');
+    }
+
+    function closeLoginModal() {
+      document.getElementById('loginModal').classList.add('hidden');
+      document.getElementById('loginModal').classList.remove('flex');
+    }
+
+    function handleAuthButtonClick() {
+      if (currentUser) {
+        if (confirm(`確定要登出目前帳號 (${currentUser.name}) 嗎？`)) {
+          currentUser = null;
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+          location.reload();
+        }
+      } else {
+        openLoginModal();
+      }
+    }
+
+    async function submitLogin(e) {
+      e.preventDefault();
+      const account = document.getElementById('loginAccountInput').value.trim();
+      const password = document.getElementById('loginPasswordInput').value.trim();
+      const errBox = document.getElementById('loginErrorMsg');
+      const btn = document.getElementById('btnSubmitLogin');
+
+      errBox.classList.add('hidden');
+      btn.disabled = true;
+      btn.innerText = '驗證中...';
+
+      try {
+        // 1. 若後端 BBTApi 已實作 login 方法則優先呼叫
+        if (typeof BBTApi.login === 'function') {
+          const apiRes = await BBTApi.login(account, password);
+          if (apiRes && apiRes.result === 'ok' && apiRes.user) {
+            currentUser = apiRes.user;
+            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(currentUser));
+            closeLoginModal();
+            await initSystem();
+            return;
+          }
+        }
+
+        // 2. 本機與名單比對驗證邏輯（支援預設 admin 帳號與名單內所有球員/教練/領隊）
+        const roleOverrides = JSON.parse(localStorage.getItem(ROLE_OVERRIDE_KEY) || '{}');
+        const customPasswords = JSON.parse(localStorage.getItem('bbt_custom_passwords') || '{}');
+
+        // 總管理員預設帳號
+        if (account.toLowerCase() === 'admin') {
+          const expectedPwd = customPasswords['admin'] || '1234';
+          if (password !== expectedPwd) throw new Error('總管理員密碼錯誤');
+          currentUser = {
+            user_id: 'ADMIN',
+            name: '王韶文 (系統總管)',
+            role: 'super_admin',
+            team_id: '',
+            title: '聯盟最高總管理員'
+          };
+        } else {
+          // 從 roster 名單尋找對應的 user_id 或姓名
+          const matchedPlayer = globalData.roster.find(r =>
+            String(r.user_id).toLowerCase() === account.toLowerCase() ||
+            String(r.player_name).trim() === account
+          );
+
+          if (!matchedPlayer) {
+            throw new Error('找不到此帳號或球員代號，請確認輸入是否正確。');
+          }
+
+          const expectedPwd = customPasswords[matchedPlayer.user_id] || matchedPlayer.password || '1234';
+          if (password !== expectedPwd) {
+            throw new Error('登入密碼錯誤（預設密碼為 1234）');
+          }
+
+          // 判斷權限層級：優先看總管理員指派覆寫，其次依 roster 的 role_type（領隊/教練自動賦予 team_admin）
+          let assignedRole = roleOverrides[matchedPlayer.user_id] || matchedPlayer.system_role || '';
+          if (!assignedRole) {
+            const rType = String(matchedPlayer.role_type || '').toLowerCase();
+            if (rType.includes('coach') || rType.includes('leader') || rType.includes('教練') || rType.includes('領隊') || rType.includes('隊長')) {
+              assignedRole = 'team_admin';
+            } else {
+              assignedRole = 'player';
+            }
+          }
+
+          const roleTitleMap = {
+            'super_admin': '聯盟總管理員',
+            'team_admin': '球隊管理員 (教練/領隊)',
+            'player': `現役隊員 (#${matchedPlayer.number || '—'})`
+          };
+
+          currentUser = {
+            user_id: matchedPlayer.user_id,
+            name: matchedPlayer.player_name,
+            role: assignedRole,
+            team_id: matchedPlayer.team_id,
+            title: roleTitleMap[assignedRole] || '聯盟成員'
+          };
+        }
+
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(currentUser));
+        closeLoginModal();
+        applyRolePermissions();
+        await loadRemoteScheduleOptions();
+        renderAnnouncements();
+        renderTransactions();
+      } catch (err) {
+        errBox.innerText = err.message || '登入失敗，請稍後再試';
+        errBox.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '登入系統';
+      }
+    }
+
+    // 🌟 依據登入角色動態調整 UI 權限與顯示範圍
+    function applyRolePermissions() {
+      if (!currentUser) return;
+
+      const role = currentUser.role; // 'super_admin' | 'team_admin' | 'player'
+      document.getElementById('userNameDisplay').innerText = currentUser.name;
+      document.getElementById('userTitleDisplay').innerText = currentUser.title;
+
+      // 切換右上角按鈕為「登出」
+      const btnAuth = document.getElementById('btnAuthAction');
+      btnAuth.className = "bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-xl transition border border-slate-700 flex items-center space-x-1";
+      document.getElementById('btnAuthText').innerText = "登出";
+
+      // 顯示「個人資料」按鈕（若在名單內有資料）
+      const hasRosterProfile = globalData.roster.some(r => String(r.user_id) === String(currentUser.user_id));
+      const btnSelf = document.getElementById('btnOpenSelfProfile');
+      if (hasRosterProfile) {
+        btnSelf.classList.remove('hidden');
+        btnSelf.classList.add('flex');
+      } else {
+        btnSelf.classList.add('hidden');
+      }
+
+      // 總管理員專屬「權限指派」按鈕
+      const btnRoleMgr = document.getElementById('btnOpenAdminRoleMgr');
+      if (role === 'super_admin') {
+        btnRoleMgr.classList.remove('hidden');
+        btnRoleMgr.classList.add('flex');
+      } else {
+        btnRoleMgr.classList.add('hidden');
+      }
+
+      const leftSidebar = document.getElementById('leftTeamSidebar');
+      const rightWorkspace = document.getElementById('rightMainWorkspace');
+      const divisionGroup = document.getElementById('divisionFilterGroup');
+
+      if (role === 'super_admin') {
+        document.getElementById('roleBadge').innerText = "SUPER ADMIN";
+        document.getElementById('roleBadge').className = "bg-emerald-500/20 text-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-500/30 uppercase tracking-widest";
+        
+        leftSidebar.classList.remove('hidden');
+        rightWorkspace.className = "lg:col-span-8 space-y-5";
+        divisionGroup.classList.remove('hidden');
+
+        // 開放所有管理操作
+        toggleManagementControls(true);
+
+        renderTeamSidebar();
         const filteredTeams = globalData.teams.filter(t => String(t.division).trim() === currentDivision);
-        if (filteredTeams.length > 0) {
+        if (filteredTeams.length > 0 && !currentSelectedTeamId) {
           selectTeam(filteredTeams[0].team_id);
+        } else if (currentSelectedTeamId) {
+          selectTeam(currentSelectedTeamId);
         } else if (globalData.teams.length > 0) {
           selectTeam(globalData.teams[0].team_id);
         }
       } else {
-        alert('無法連線至 Google Sheets 資料庫，請檢查 API 網址或部署權限。');
+        // 球隊管理員 & 一般球員：鎖定在所屬球隊，隱藏其他球隊清單與分組切換
+        leftSidebar.classList.add('hidden');
+        rightWorkspace.className = "lg:col-span-12 space-y-5";
+        divisionGroup.classList.add('hidden');
+
+        const myTeam = globalData.teams.find(t => String(t.team_id) === String(currentUser.team_id));
+        if (myTeam) {
+          currentDivision = String(myTeam.division).trim() || currentDivision;
+          selectTeam(myTeam.team_id);
+        }
+
+        if (role === 'team_admin') {
+          document.getElementById('roleBadge').innerText = "TEAM ADMIN";
+          document.getElementById('roleBadge').className = "bg-amber-500/20 text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-500/30 uppercase tracking-widest";
+          toggleManagementControls(true);
+        } else {
+          // 一般球員 (player)
+          document.getElementById('roleBadge').innerText = "PLAYER";
+          document.getElementById('roleBadge').className = "bg-sky-500/20 text-sky-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-sky-500/30 uppercase tracking-widest";
+          toggleManagementControls(false);
+        }
+      }
+      lucide.createIcons();
+    }
+
+    function toggleManagementControls(canManageTeam) {
+      const btnTeamEdit = document.getElementById('btnTeamProfileEdit');
+      const btnBatchAtt = document.getElementById('btnBatchAttendance');
+      const btnNewAnn = document.getElementById('btnNewAnnouncement');
+      const singleAttText = document.getElementById('btnSingleAttendanceText');
+      const attHeader = document.getElementById('attendanceHeaderTitle');
+
+      if (canManageTeam) {
+        btnTeamEdit.classList.remove('hidden');
+        btnBatchAtt.classList.remove('hidden');
+        btnNewAnn.classList.remove('hidden');
+        singleAttText.innerText = '+ 單筆回報';
+        attHeader.innerText = '球員出席回報與請假管理控制台';
+      } else {
+        btnTeamEdit.classList.add('hidden');
+        btnBatchAtt.classList.add('hidden');
+        btnNewAnn.classList.add('hidden');
+        singleAttText.innerText = '+ 我要出席回報 / 請假';
+        attHeader.innerText = '我的賽前出勤回報與球隊出賽狀態';
       }
     }
 
+    // ================= 球員個人資料編輯 =================
+    function openSelfProfileModal() {
+      if (!currentUser) return;
+      const pObj = globalData.roster.find(r => String(r.user_id) === String(currentUser.user_id));
+      if (!pObj) {
+        alert('此管理員帳號未綁定球員名單資料');
+        return;
+      }
+
+      document.getElementById('selfName').value = pObj.player_name || '';
+      document.getElementById('selfNumber').value = pObj.number ? `#${pObj.number}` : '未設定';
+      document.getElementById('selfPosition').value = pObj.position || '';
+      document.getElementById('selfBatThrow').value = pObj.bat_throw || '右投右打';
+      document.getElementById('selfPhone').value = pObj.phone || '';
+      document.getElementById('selfNewPassword').value = '';
+
+      document.getElementById('selfProfileModal').classList.remove('hidden');
+      document.getElementById('selfProfileModal').classList.add('flex');
+    }
+
+    function closeSelfProfileModal() {
+      document.getElementById('selfProfileModal').classList.add('hidden');
+      document.getElementById('selfProfileModal').classList.remove('flex');
+    }
+
+    async function saveSelfProfile() {
+      if (!currentUser) return;
+      const pObj = globalData.roster.find(r => String(r.user_id) === String(currentUser.user_id));
+      if (!pObj) return;
+
+      const position = document.getElementById('selfPosition').value.trim();
+      const bat_throw = document.getElementById('selfBatThrow').value;
+      const phone = document.getElementById('selfPhone').value.trim();
+      const newPwd = document.getElementById('selfNewPassword').value.trim();
+
+      // 更新前端快取
+      pObj.position = position;
+      pObj.bat_throw = bat_throw;
+      pObj.phone = phone;
+
+      if (newPwd) {
+        const customPasswords = JSON.parse(localStorage.getItem('bbt_custom_passwords') || '{}');
+        customPasswords[currentUser.user_id] = newPwd;
+        localStorage.setItem('bbt_custom_passwords', JSON.stringify(customPasswords));
+      }
+
+      // 若後端 BBTApi 有提供更新個人資料接口則同步呼叫
+      if (typeof BBTApi.savePlayerProfile === 'function') {
+        await BBTApi.savePlayerProfile({
+          user_id: currentUser.user_id,
+          team_id: currentUser.team_id,
+          position,
+          bat_throw,
+          phone,
+          password: newPwd || undefined
+        });
+      }
+
+      alert('✅ 個人資料已更新！');
+      closeSelfProfileModal();
+      renderRosterTable();
+    }
+
+    // ================= 總管理員：角色權限指派 =================
+    function openAdminRoleModal() {
+      const teamSel = document.getElementById('roleMgrTeamSelect');
+      teamSel.innerHTML = globalData.teams.map(t => `<option value="${t.team_id}">${t.team_name} (${t.division})</option>`).join('');
+      if (currentSelectedTeamId) teamSel.value = currentSelectedTeamId;
+      populateRoleMgrPlayerSelect();
+
+      document.getElementById('adminRoleModal').classList.remove('hidden');
+      document.getElementById('adminRoleModal').classList.add('flex');
+    }
+
+    function closeAdminRoleModal() {
+      document.getElementById('adminRoleModal').classList.add('hidden');
+      document.getElementById('adminRoleModal').classList.remove('flex');
+    }
+
+    function populateRoleMgrPlayerSelect() {
+      const teamId = document.getElementById('roleMgrTeamSelect').value;
+      const userSel = document.getElementById('roleMgrUserSelect');
+      const members = globalData.roster.filter(r => String(r.team_id) === String(teamId));
+      const roleOverrides = JSON.parse(localStorage.getItem(ROLE_OVERRIDE_KEY) || '{}');
+
+      userSel.innerHTML = members.length > 0
+        ? members.map(m => {
+            const curRole = roleOverrides[m.user_id] || '預設';
+            return `<option value="${m.user_id}">#${m.number || '—'} ${m.player_name} [${m.role_type || 'player'}] (目前權限: ${curRole})</option>`;
+          }).join('')
+        : `<option value="">該球隊尚無登錄人員</option>`;
+    }
+
+    function saveAssignedUserRole() {
+      const userId = document.getElementById('roleMgrUserSelect').value;
+      const newRole = document.getElementById('roleMgrLevelSelect').value;
+      if (!userId) return;
+
+      const roleOverrides = JSON.parse(localStorage.getItem(ROLE_OVERRIDE_KEY) || '{}');
+      roleOverrides[userId] = newRole;
+      localStorage.setItem(ROLE_OVERRIDE_KEY, JSON.stringify(roleOverrides));
+
+      alert('✅ 已成功指派該帳號權限！下次該帳號登入時將套用新權限。');
+      populateRoleMgrPlayerSelect();
+    }
+
+    // ================= 球隊清單與控制台渲染 =================
     function renderTeamSidebar(searchKeyword = '') {
       const container = document.getElementById('teamSidebarContainer');
       const filtered = globalData.teams.filter(t => {
@@ -730,6 +1217,11 @@
     }
 
     function selectTeam(teamId) {
+      // 權限防護：非總管理員只能檢視自己所屬的球隊
+      if (currentUser && currentUser.role !== 'super_admin' && String(teamId) !== String(currentUser.team_id)) {
+        return;
+      }
+
       currentSelectedTeamId = teamId;
       renderTeamSidebar(document.getElementById('teamSearchInput').value);
 
@@ -767,6 +1259,7 @@
       const attUserSelect = document.getElementById('attUserSelect');
       const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
 
+      // 1. 修改模式：強制帶入該筆紀錄的球員並鎖定
       if (editRecordId) {
         const attObj = globalData.attendance.find(a => String(a.att_id) === String(editRecordId));
         if (attObj) {
@@ -779,24 +1272,35 @@
         }
       }
 
-      attUserSelect.disabled = false;
-      const selectedGameId = document.getElementById('attGameSelect') ? document.getElementById('attGameSelect').value : '';
-      let availablePlayers = teamRoster;
+      // 2. 一般球員 (player) 新增請假/出席模式：只能選擇自己並鎖定
+      if (currentUser && currentUser.role === 'player') {
+        const selfObj = teamRoster.find(p => String(p.user_id) === String(currentUser.user_id));
+        const selfLabel = selfObj
+          ? `#${selfObj.number || '—'} ${selfObj.player_name} (${selfObj.position || '球員'})`
+          : `${currentUser.name}`;
+        attUserSelect.innerHTML = `<option value="${currentUser.user_id}" selected>${selfLabel}</option>`;
+        attUserSelect.disabled = true;
+      } else {
+        // 3. 管理員新增模式：開放選取，並過濾掉已回報過的球員
+        attUserSelect.disabled = false;
+        const selectedGameId = document.getElementById('attGameSelect') ? document.getElementById('attGameSelect').value : '';
+        let availablePlayers = teamRoster;
 
-      if (selectedGameId) {
-        const alreadyReportedUserIds = new Set();
-        globalData.attendance
-          .filter(att => String(att.game_id) === String(selectedGameId) && String(att.team_id) === String(currentSelectedTeamId))
-          .forEach(att => alreadyReportedUserIds.add(String(att.user_id)));
+        if (selectedGameId) {
+          const alreadyReportedUserIds = new Set();
+          globalData.attendance
+            .filter(att => String(att.game_id) === String(selectedGameId) && String(att.team_id) === String(currentSelectedTeamId))
+            .forEach(att => alreadyReportedUserIds.add(String(att.user_id)));
 
-        availablePlayers = teamRoster.filter(p => !alreadyReportedUserIds.has(String(p.user_id)));
+          availablePlayers = teamRoster.filter(p => !alreadyReportedUserIds.has(String(p.user_id)));
+        }
+
+        attUserSelect.innerHTML = availablePlayers.length > 0 
+          ? availablePlayers.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
+          : `<option value="">此場次該球隊所有球員皆已完成回報</option>`;
       }
 
-      attUserSelect.innerHTML = availablePlayers.length > 0 
-        ? availablePlayers.map(p => `<option value="${p.user_id}">#${p.number || '—'} ${p.player_name} (${p.position || '球員'})</option>`).join('')
-        : `<option value="">此場次該球隊所有球員皆已完成回報</option>`;
-
-      // 🌟 FA 選擇選單：自動過濾掉已經宣告過 FA 的球員
+      // 4. FA 選擇選單：自動過濾掉已經宣告過 FA 的球員；若為一般球員則僅顯示自己
       const faUserSelect = document.getElementById('faUserSelect');
       if (faUserSelect) {
         const alreadyFaUserIds = new Set();
@@ -804,14 +1308,21 @@
           .filter(tx => String(tx.tx_type).includes('FA'))
           .forEach(tx => alreadyFaUserIds.add(String(tx.user_id)));
 
-        const availableFaPlayers = teamRoster.filter(p => !alreadyFaUserIds.has(String(p.user_id)));
+        let availableFaPlayers = teamRoster.filter(p => !alreadyFaUserIds.has(String(p.user_id)));
+
+        if (currentUser && currentUser.role === 'player') {
+          availableFaPlayers = availableFaPlayers.filter(p => String(p.user_id) === String(currentUser.user_id));
+          faUserSelect.disabled = true;
+        } else {
+          faUserSelect.disabled = false;
+        }
 
         faUserSelect.innerHTML = availableFaPlayers.length > 0 
           ? availableFaPlayers.map(p => {
               const displayName = p.number ? `#${p.number} ${p.player_name}` : p.player_name;
               return `<option value="${p.user_id}">${displayName} (${p.position || '球員'})</option>`;
             }).join('')
-          : `<option value="">此球隊目前無可宣告 FA 之球員 (皆已宣告或無球員)</option>`;
+          : `<option value="">目前無可宣告 FA 之球員 (已宣告或無符合名單)</option>`;
       }
     }
 
@@ -985,15 +1496,30 @@
         return;
       }
 
+      const isAdminRole = currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'team_admin');
+
       tbody.innerHTML = list.map(att => {
         const pObj = globalData.roster.find(r => String(r.user_id) === String(att.user_id));
         const displayName = pObj ? `${pObj.player_name} (#${pObj.number || '—'})` : att.user_id;
-
         const gameDisplay = globalGameCache[String(att.game_id)] || att.game_id;
 
         let statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">確認出席</span>';
         if (att.status === 'leave') statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">缺席請假</span>';
         if (att.status === 'sub') statusBadge = '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">候補支援</span>';
+
+        // 權限判斷：管理員可修改/刪除所有人，一般球員只能修改自己的出勤紀錄
+        const isSelfRecord = currentUser && String(att.user_id) === String(currentUser.user_id);
+        let actionButtonsHtml = '<span class="text-slate-300 text-[10px]">—</span>';
+        if (isAdminRole) {
+          actionButtonsHtml = `
+            <button onclick="editAttendance('${att.att_id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">修改</button>
+            <button onclick="deleteAttendance('${att.att_id}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">刪除</button>
+          `;
+        } else if (isSelfRecord) {
+          actionButtonsHtml = `
+            <button onclick="editAttendance('${att.att_id}')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">修改狀態</button>
+          `;
+        }
 
         return `
           <tr>
@@ -1002,10 +1528,7 @@
             <td class="p-3">${statusBadge}</td>
             <td class="p-3 text-slate-600">${att.reason || '—'}</td>
             <td class="p-3 text-slate-400">${att.updated_at || '—'}</td>
-            <td class="p-3 text-right space-x-1.5">
-              <button onclick="editAttendance('${att.att_id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">修改</button>
-              <button onclick="deleteAttendance('${att.att_id}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">刪除</button>
-            </td>
+            <td class="p-3 text-right space-x-1.5">${actionButtonsHtml}</td>
           </tr>
         `;
       }).join('');
@@ -1021,7 +1544,10 @@
       if (!game_id) { alert('請選擇比賽場次'); return; }
       if (!user_id && !att_id) { alert('請選擇球員'); return; }
 
-      const payload = { game_id, team_id: currentSelectedTeamId, user_id, status, reason };
+      // 安全防呆：一般球員強制只能送出自己的 user_id
+      const finalUserId = (currentUser && currentUser.role === 'player') ? currentUser.user_id : user_id;
+
+      const payload = { game_id, team_id: currentSelectedTeamId, user_id: finalUserId, status, reason };
       if (att_id) payload.att_id = att_id;
 
       const res = await BBTApi.saveAttendance(payload);
@@ -1138,15 +1664,19 @@
       tbody.innerHTML = filtered.map(p => {
         const pStats = globalData.stats.find(s => String(s.user_id) === String(p.user_id) && String(s.season) === currentSeason);
         const statSummary = pStats ? `AVG .${Math.floor((pStats.h / (pStats.ab || 1)) * 1000)} / HR ${pStats.hr || 0}` : '尚無打擊紀錄';
+        const isMe = currentUser && String(p.user_id) === String(currentUser.user_id);
 
         return `
-          <tr class="hover:bg-slate-50 transition">
+          <tr class="hover:bg-slate-50 transition ${isMe ? 'bg-emerald-50/40' : ''}">
             <td class="p-3 font-black text-slate-900">${p.number || '—'}</td>
             <td class="p-3">
-              <button onclick="openPlayerCard('${p.user_id}')" class="font-black text-bbt-navy hover:text-emerald-600 underline decoration-emerald-400 decoration-2 underline-offset-4 flex items-center gap-1">
-                <span>${p.player_name}</span>
-                <i data-lucide="id-card" class="w-3.5 h-3.5 text-emerald-600"></i>
-              </button>
+              <div class="flex items-center gap-2">
+                <button onclick="openPlayerCard('${p.user_id}')" class="font-black text-bbt-navy hover:text-emerald-600 underline decoration-emerald-400 decoration-2 underline-offset-4 flex items-center gap-1">
+                  <span>${p.player_name}</span>
+                  <i data-lucide="id-card" class="w-3.5 h-3.5 text-emerald-600"></i>
+                </button>
+                ${isMe ? '<span class="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded">本人</span>' : ''}
+              </div>
             </td>
             <td class="p-3"><span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold text-[11px]">${p.role_type || 'player'}</span></td>
             <td class="p-3">${p.position || '—'}</td>
@@ -1160,6 +1690,7 @@
     }
 
     async function openPlayerCard(userId) {
+      activeCardUserId = userId;
       const cardRes = await BBTApi.getPlayerCard(userId, currentSeason);
       if (cardRes && cardRes.result === 'ok') {
         const p = cardRes.profile;
@@ -1177,11 +1708,22 @@
           awardsContainer.innerHTML = `<span class="bg-slate-800 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded">尚無登錄獎項</span>`;
         }
 
+        // 若開啟的是登入者本人的球員卡，顯示「編輯我的資料」捷徑
+        const btnEditSelf = document.getElementById('btnCardEditSelf');
+        if (currentUser && String(currentUser.user_id) === String(userId)) {
+          btnEditSelf.classList.remove('hidden');
+          btnEditSelf.classList.add('flex');
+        } else {
+          btnEditSelf.classList.add('hidden');
+          btnEditSelf.classList.remove('flex');
+        }
+
         activePlayerCardCache = { season, career };
         toggleCardStats('season');
 
         document.getElementById('playerCardModal').classList.remove('hidden');
         document.getElementById('playerCardModal').classList.add('flex');
+        lucide.createIcons();
       } else {
         alert('無法取得球員詳細成績');
       }
@@ -1246,7 +1788,10 @@
 
     function renderTransactions() {
       const tbody = document.getElementById('transactionsTableBody');
-      const txs = globalData.transactions;
+      // 非總管理員只顯示與自己球隊相關的異動紀錄
+      const txs = (currentUser && currentUser.role !== 'super_admin')
+        ? globalData.transactions.filter(tx => String(tx.from_team_id) === String(currentSelectedTeamId) || String(tx.to_team_id) === String(currentSelectedTeamId))
+        : globalData.transactions;
 
       if (txs.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">目前尚無球員異動紀錄</td></tr>`;
@@ -1278,7 +1823,6 @@
     async function openAttendanceModal() { 
       document.getElementById('attEditRecordId').value = '';
       document.getElementById('attendanceModalTitle').innerText = "賽前出勤回報與請假系統";
-      document.getElementById('attUserSelect').disabled = false;
       document.getElementById('attendanceModal').classList.remove('hidden'); 
       document.getElementById('attendanceModal').classList.add('flex'); 
       await loadRemoteScheduleOptions();
@@ -1289,7 +1833,7 @@
     function closeAnnouncementModal() { document.getElementById('announcementModal').classList.add('hidden'); document.getElementById('announcementModal').classList.remove('flex'); }
 
     function openFaApplyModal() { 
-      updateTeamPlayerSelects(); // 🌟 打開 FA 宣告彈窗時自動重新整理下拉選單，過濾已宣告球員
+      updateTeamPlayerSelects();
       document.getElementById('faApplyModal').classList.remove('hidden'); 
       document.getElementById('faApplyModal').classList.add('flex'); 
     }
@@ -1344,10 +1888,8 @@
     }
 
     function switchDiv(divName) {
+      if (currentUser && currentUser.role !== 'super_admin') return;
       currentDivision = divName;
-      ['maj', 'min', 'rok'].forEach(k => { document.getElementById('btn-' + k).className = "px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition"; });
-      const map = { '大聯盟': 'maj', '小聯盟': 'minor', '育成組': 'rok' }; // note: keeping map keys exact
-      // switch logic retained
       ['maj', 'min', 'rok'].forEach(k => { document.getElementById('btn-' + k).className = "px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition"; });
       const activeMap = { '大聯盟': 'maj', '小聯盟': 'min', '育成組': 'rok' };
       document.getElementById('btn-' + activeMap[divName]).className = "px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition";
@@ -1374,20 +1916,6 @@
 
     function filterTeamSidebar(keyword) { renderTeamSidebar(keyword); }
     function onSeasonChange(season) { currentSeason = season; initSystem(); }
-
-    function switchRoleMode(mode) {
-      if (mode === 'captain') {
-        document.getElementById('mode-captain').className = "px-3 py-1 rounded-lg text-xs font-black bg-amber-500 text-slate-950 shadow transition";
-        document.getElementById('mode-admin').className = "px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition";
-        document.getElementById('roleBadge').innerText = "TEAM CAPTAIN";
-        document.getElementById('userNameDisplay').innerText = "隊長視角";
-      } else {
-        document.getElementById('mode-admin').className = "px-3 py-1 rounded-lg text-xs font-black bg-emerald-600 text-white shadow transition";
-        document.getElementById('mode-captain').className = "px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition";
-        document.getElementById('roleBadge').innerText = "PRO ADMIN";
-        document.getElementById('userNameDisplay').innerText = "王韶文";
-      }
-    }
   </script>
 </body>
 </html>
