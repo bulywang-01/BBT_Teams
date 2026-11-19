@@ -1228,53 +1228,86 @@ function updateTeamPlayerSelects() {
   const selfNumber = selfRosterObj.number ? `#${selfRosterObj.number} ` : '';
   const selfPos = selfRosterObj.position ? ` (${selfRosterObj.position})` : '';
 
-  if (faUserSelect) {
-    if (!isSuperAdmin && selfUserId) {
+  const hideFaSelectAndShowBadge_ = (modalEl) => {
+    if (!modalEl) return;
+    if (faUserSelect) {
       faUserSelect.innerHTML = `<option value="${selfUserId}" selected>${selfNumber}${selfName}${selfPos}</option>`;
       faUserSelect.value = selfUserId;
       faUserSelect.disabled = true;
-      const selectContainer = faUserSelect.closest('div');
-      if (selectContainer) {
-        selectContainer.classList.add('hidden');
-      }
-      const modalEl = document.getElementById('faApplyModal');
-      if (modalEl && !document.getElementById('faSelfPlayerBadge')) {
-        const badge = document.createElement('div');
-        badge.id = 'faSelfPlayerBadge';
-        badge.className = 'mb-3 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs';
-        badge.innerHTML = `
-          <span class="font-bold text-slate-500">宣告球員（本人）</span>
-          <span class="font-black text-emerald-900">${selfNumber}${selfName}${selfPos}</span>
-        `;
-        if (selectContainer && selectContainer.parentElement) {
-          selectContainer.parentElement.insertBefore(badge, selectContainer);
-        }
-      } else if (document.getElementById('faSelfPlayerBadge')) {
-        document.getElementById('faSelfPlayerBadge').innerHTML = `
-          <span class="font-bold text-slate-500">宣告球員（本人）</span>
-          <span class="font-black text-emerald-900">${selfNumber}${selfName}${selfPos}</span>
-        `;
-      }
-    } else {
-      const selectContainer = faUserSelect.closest('div');
-      if (selectContainer) selectContainer.classList.remove('hidden');
-      const existingBadge = document.getElementById('faSelfPlayerBadge');
-      if (existingBadge) existingBadge.remove();
-
-      const alreadyFaUserIds = new Set();
-      globalData.transactions
-        .filter(tx => String(tx.tx_type).includes('FA'))
-        .forEach(tx => alreadyFaUserIds.add(String(tx.user_id)));
-
-      const availableFaPlayers = teamRoster.filter(p => !alreadyFaUserIds.has(String(p.user_id)));
-      faUserSelect.disabled = false;
-      faUserSelect.innerHTML = availableFaPlayers.length > 0
-        ? availableFaPlayers.map(p => {
-            const displayName = p.number ? `#${p.number} ${p.player_name}` : p.player_name;
-            return `<option value="${p.user_id}">${displayName} (${p.position || '球員'})</option>`;
-          }).join('')
-        : `<option value="">目前無可宣告 FA 之球員 (已宣告或無符合名單)</option>`;
     }
+
+    const allSelects = Array.from(modalEl.querySelectorAll('select'));
+    allSelects.forEach(sel => {
+      if (sel.id === 'faFlowModeSelect') return;
+      const optTexts = Array.from(sel.options || []).map(o => o.text || '');
+      const isPlayerSelect =
+        sel.id === 'faUserSelect' ||
+        sel.name === 'faUserSelect' ||
+        optTexts.some(t => t.includes('陳澤宇') || t.includes('王韶文') || t.includes('(球員)') || t.includes('(C)'));
+      if (isPlayerSelect) {
+        const wrapper = sel.closest('.mb-3, .mb-4, .space-y-1, .space-y-1\.5, .form-group') || sel.parentElement;
+        if (wrapper && wrapper !== modalEl) {
+          wrapper.style.display = 'none';
+          wrapper.classList.add('hidden');
+        } else {
+          sel.style.display = 'none';
+          sel.classList.add('hidden');
+        }
+        const prevLabel = wrapper ? wrapper.previousElementSibling : sel.previousElementSibling;
+        if (prevLabel && prevLabel.tagName === 'LABEL' && prevLabel.textContent.includes('選擇球員')) {
+          prevLabel.style.display = 'none';
+          prevLabel.classList.add('hidden');
+        }
+      }
+    });
+
+    let badge = document.getElementById('faSelfPlayerBadge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'faSelfPlayerBadge';
+      badge.className = 'mb-3 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs';
+      const flowWrap = document.getElementById('faFlowModeSelect')?.closest('div');
+      const noteEl = document.getElementById('faNote');
+      const anchor = flowWrap || (noteEl ? noteEl.parentElement : null);
+      if (anchor && anchor.parentElement) {
+        anchor.parentElement.insertBefore(badge, anchor);
+      } else {
+        modalEl.appendChild(badge);
+      }
+    }
+    badge.style.display = 'flex';
+    badge.classList.remove('hidden');
+    badge.innerHTML = `
+      <span class="font-bold text-slate-500">宣告球員（本人）</span>
+      <span class="font-black text-emerald-900">${selfNumber}${selfName}${selfPos}</span>
+    `;
+  };
+
+  const modalEl = document.getElementById('faApplyModal');
+  if (!isSuperAdmin && selfUserId) {
+    hideFaSelectAndShowBadge_(modalEl);
+  } else if (faUserSelect) {
+    const selectContainer = faUserSelect.closest('div');
+    if (selectContainer) {
+      selectContainer.style.display = '';
+      selectContainer.classList.remove('hidden');
+    }
+    const existingBadge = document.getElementById('faSelfPlayerBadge');
+    if (existingBadge) existingBadge.remove();
+
+    const alreadyFaUserIds = new Set();
+    globalData.transactions
+      .filter(tx => String(tx.tx_type).includes('FA'))
+      .forEach(tx => alreadyFaUserIds.add(String(tx.user_id)));
+
+    const availableFaPlayers = teamRoster.filter(p => !alreadyFaUserIds.has(String(p.user_id)));
+    faUserSelect.disabled = false;
+    faUserSelect.innerHTML = availableFaPlayers.length > 0
+      ? availableFaPlayers.map(p => {
+          const displayName = p.number ? `#${p.number} ${p.player_name}` : p.player_name;
+          return `<option value="${p.user_id}">${displayName} (${p.position || '球員'})</option>`;
+        }).join('')
+      : `<option value="">目前無可宣告 FA 之球員 (已宣告或無符合名單)</option>`;
   }
 }
 
@@ -2355,24 +2388,46 @@ function openAnnouncementModal() {
 }
 function closeAnnouncementModal() { document.getElementById('announcementModal').classList.add('hidden'); document.getElementById('announcementModal').classList.remove('flex'); }
 
+function clearFaNoteDefault_() {
+  const noteEl = document.getElementById('faNote');
+  if (!noteEl) return;
+  noteEl.value = '';
+  if (noteEl.tagName === 'TEXTAREA' || noteEl.tagName === 'INPUT') {
+    noteEl.placeholder = '若選擇「已確定球隊」，請於此填寫球隊名稱';
+  }
+}
+
 function ensureFaModeSelector_() {
   const modal = document.getElementById('faApplyModal');
-  if (!modal || document.getElementById('faFlowModeSelect')) return;
+  if (!modal) return;
 
   const noteInput = document.getElementById('faNote');
   const host = noteInput ? noteInput.parentElement : null;
-  if (!host) return;
 
-  const wrap = document.createElement('div');
-  wrap.className = 'mb-3';
-  wrap.innerHTML = `
-    <label class="block text-xs font-bold text-slate-700 mb-1">FA 申請途徑（由球員提出並知會原球隊）</label>
-    <select id="faFlowModeSelect" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white">
-      <option value="已確定球隊">已確定球隊</option>
-      <option value="由聯盟配對">由聯盟配對</option>
-    </select>
-  `;
-  host.parentElement.insertBefore(wrap, host);
+  if (!document.getElementById('faFlowModeSelect') && host && host.parentElement) {
+    const wrap = document.createElement('div');
+    wrap.className = 'mb-3';
+    wrap.innerHTML = `
+      <label class="block text-xs font-bold text-slate-700 mb-1">FA 申請途徑（由球員提出並知會原球隊）</label>
+      <select id="faFlowModeSelect" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white">
+        <option value="已確定球隊(下方備註請填寫球隊名稱)">已確定球隊(下方備註請填寫球隊名稱)</option>
+        <option value="由聯盟配對">由聯盟配對</option>
+      </select>
+    `;
+    host.parentElement.insertBefore(wrap, host);
+  } else {
+    const modeSel = document.getElementById('faFlowModeSelect');
+    if (modeSel && modeSel.options.length > 0) {
+      modeSel.options[0].value = '已確定球隊(下方備註請填寫球隊名稱)';
+      modeSel.options[0].text = '已確定球隊(下方備註請填寫球隊名稱)';
+      if (modeSel.options[1]) {
+        modeSel.options[1].value = '由聯盟配對';
+        modeSel.options[1].text = '由聯盟配對';
+      }
+    }
+  }
+
+  clearFaNoteDefault_();
 }
 
 function openFaApplyModal() {
@@ -2384,8 +2439,13 @@ function openFaApplyModal() {
   }
   ensureFaModeSelector_();
   updateTeamPlayerSelects();
+  clearFaNoteDefault_();
   document.getElementById('faApplyModal').classList.remove('hidden');
   document.getElementById('faApplyModal').classList.add('flex');
+  setTimeout(() => {
+    updateTeamPlayerSelects();
+    clearFaNoteDefault_();
+  }, 0);
 }
 function closeFaApplyModal() { document.getElementById('faApplyModal').classList.add('hidden'); document.getElementById('faApplyModal').classList.remove('flex'); }
 
