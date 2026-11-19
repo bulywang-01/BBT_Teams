@@ -410,7 +410,7 @@ async function enrollExistingUserToTeam() {
   }
 }
 
-// --- 精準依 roster_id 編輯本隊球員背號與編制 ---
+// --- 精準依 roster_id 編輯球員 ---
 function openEditRosterModal(userId, rosterId = '') {
   if (!currentSelectedTeamId) {
     alert('請先選擇球隊');
@@ -1022,7 +1022,7 @@ function renderRosterTable() {
         <td class="p-3 text-center"><span class="bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2 py-0.5 rounded-full text-[10px]">${p.status || 'approved'}</span></td>
         <td class="p-3 text-right">
           ${canManageRoster
-            ? `<button onclick="openEditRosterModal('${p.user_id}', '${safeRosterId}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">改背號</button>`
+            ? `<button onclick="openEditRosterModal('${p.user_id}', '${safeRosterId}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">異動</button>`
             : `<span class="text-slate-300 text-[10px]">—</span>`}
         </td>
       </tr>
