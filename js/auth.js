@@ -1,6 +1,5 @@
 // ============================================================================
 // BBT 軟式棒球聯盟 - 帳號登入、角色權限控管與個人資料模組 (js/auth.js)
-// 完整支援：super_admin / team_admin / player、個人資料維護、權限指派
 // ============================================================================
 
 const BBTAuth = {
@@ -97,11 +96,14 @@ const BBTAuth = {
     }
 
     const teamObj = teamsList.find(t => String(t.team_id) === String(primaryTeamId));
-    const displayName = matchedPlayer.player_name
-      || matchedUserRow.player_name
+    const displayName = String(
+      matchedUserRow.player_name
       || backendUser.player_name
+      || matchedPlayer.player_name
       || backendUser.name
-      || (role === 'super_admin' ? '系統管理員' : (backendUser.account || uid));
+      || backendUser.account
+      || uid
+    ).trim();
 
     const roleTitleMap = {
       'super_admin': '聯盟最高總管理員',
@@ -113,6 +115,7 @@ const BBTAuth = {
       user_id: uid,
       account: backendUser.account || uid,
       name: displayName,
+      player_name: displayName,
       role: role,
       global_role: backendUser.global_role || 'user',
       team_id: primaryTeamId,
@@ -188,72 +191,63 @@ const BBTAuth = {
       const roleOverrides = JSON.parse(localStorage.getItem(this.ROLE_OVERRIDE_KEY) || '{}');
       const customPasswords = JSON.parse(localStorage.getItem(this.CUSTOM_PWD_KEY) || '{}');
 
-      if (account.toLowerCase() === 'admin' || account.toLowerCase() === 'bbsadmin' || account.toLowerCase() === 'bbtadmin') {
-        const expectedPwd = customPasswords[account.toLowerCase()] || '1234';
-        if (password !== expectedPwd) throw new Error('總管理員密碼錯誤');
-        this.setSession({
-          user_id: '9001',
-          account: account,
-          name: '系統管理員',
-          role: 'super_admin',
-          global_role: 'super_admin',
-          team_id: '',
-          title: '聯盟最高總管理員'
-        });
-      } else {
-        const matchedPlayer = rosterList.find(r =>
-          String(r.user_id).toLowerCase() === account.toLowerCase() ||
-          String(r.player_name).trim() === account
-        );
-        const matchedUser = usersList.find(u =>
-          String(u.account).toLowerCase() === account.toLowerCase() ||
-          String(u.user_id).toLowerCase() === account.toLowerCase()
-        );
+      const matchedUser = usersList.find(u =>
+        String(u.account).toLowerCase() === account.toLowerCase() ||
+        String(u.user_id).toLowerCase() === account.toLowerCase()
+      );
+      const matchedPlayer = rosterList.find(r =>
+        String(r.user_id).toLowerCase() === account.toLowerCase() ||
+        String(r.player_name).trim() === account
+      );
 
-        if (!matchedPlayer && !matchedUser) {
-          throw new Error('找不到此帳號或球員代號，請確認輸入是否正確。');
-        }
-
-        const uid = matchedPlayer ? matchedPlayer.user_id : matchedUser.user_id;
-        const expectedPwd = customPasswords[uid] || '1234';
-        if (password !== expectedPwd) {
-          throw new Error('登入密碼錯誤（預設密碼為 1234）');
-        }
-
-        let assignedRole = roleOverrides[uid] || 'player';
-        if (!roleOverrides[uid] && matchedPlayer) {
-          const rType = String(matchedPlayer.role_type || '').toLowerCase();
-          if (rType.includes('coach') || rType.includes('leader') || rType.includes('教練') || rType.includes('領隊') || rType.includes('隊長')) {
-            assignedRole = 'team_admin';
-          }
-        }
-
-        const displayName = (matchedPlayer && matchedPlayer.player_name)
-          || (matchedUser && matchedUser.player_name)
-          || account;
-
-        const roleTitleMap = {
-          'super_admin': '聯盟最高總管理員',
-          'team_admin': '球隊管理員 (教練/領隊)',
-          'player': `現役隊員${matchedPlayer && matchedPlayer.number ? ` (#${matchedPlayer.number})` : ''}`
-        };
-
-        this.setSession({
-          user_id: uid,
-          account: account,
-          name: displayName,
-          role: assignedRole,
-          global_role: assignedRole === 'super_admin' ? 'super_admin' : 'user',
-          team_id: matchedPlayer ? matchedPlayer.team_id : '',
-          title: roleTitleMap[assignedRole] || '聯盟成員'
-        });
+      if (!matchedUser && !matchedPlayer && account.toLowerCase() !== 'admin' && account.toLowerCase() !== 'bbsadmin' && account.toLowerCase() !== 'bbtadmin') {
+        throw new Error('找不到此帳號或球員代號，請確認輸入是否正確。');
       }
 
+      const uid = matchedUser ? String(matchedUser.user_id) : (matchedPlayer ? String(matchedPlayer.user_id) : '9001');
+      const expectedPwd = customPasswords[uid] || customPasswords[account.toLowerCase()] || '1234';
+      if (password !== expectedPwd) {
+        throw new Error('登入密碼錯誤（預設密碼為 1234）');
+      }
+
+      const isSuper = (matchedUser && String(matchedUser.global_role).trim() === 'super_admin')
+        || ['admin', 'bbsadmin', 'bbtadmin'].includes(account.toLowerCase());
+
+      let assignedRole = isSuper ? 'super_admin' : (roleOverrides[uid] || 'player');
+      if (!isSuper && !roleOverrides[uid] && matchedPlayer) {
+        const rType = String(matchedPlayer.role_type || '').toLowerCase();
+        if (rType.includes('coach') || rType.includes('leader') || rType.includes('教練') || rType.includes('領隊') || rType.includes('隊長')) {
+          assignedRole = 'team_admin';
+        }
+      }
+
+      const displayName = String(
+        (matchedUser && matchedUser.player_name)
+        || (matchedPlayer && matchedPlayer.player_name)
+        || account
+      ).trim();
+
+      const roleTitleMap = {
+        'super_admin': '聯盟最高總管理員',
+        'team_admin': '球隊管理員 (教練/領隊)',
+        'player': `現役隊員${matchedPlayer && matchedPlayer.number ? ` (#${matchedPlayer.number})` : ''}`
+      };
+
+      this.setSession({
+        user_id: uid,
+        account: matchedUser ? matchedUser.account : account,
+        name: displayName,
+        player_name: displayName,
+        role: assignedRole,
+        global_role: assignedRole === 'super_admin' ? 'super_admin' : 'user',
+        team_id: matchedPlayer ? matchedPlayer.team_id : '',
+        title: roleTitleMap[assignedRole] || '聯盟成員'
+      });
+
       this.closeLoginModal();
-      this.applyRolePermissions();
-      if (typeof loadRemoteScheduleOptions === 'function') await loadRemoteScheduleOptions();
-      if (typeof renderAnnouncements === 'function') renderAnnouncements();
-      if (typeof renderTransactions === 'function') renderTransactions();
+      if (typeof initSystem === 'function') {
+        await initSystem();
+      }
     } catch (err) {
       errBox.innerText = err.message || '登入失敗，請稍後再試';
       errBox.classList.remove('hidden');
@@ -268,19 +262,33 @@ const BBTAuth = {
     if (!user) return;
 
     const role = user.role;
-    document.getElementById('userNameDisplay').innerText = user.name;
-    document.getElementById('userTitleDisplay').innerText = user.title;
+    const usersList = (window.globalData && window.globalData.users) || [];
+    const rosterList = (window.globalData && window.globalData.roster) || [];
+    const teamsList = (window.globalData && window.globalData.teams) || [];
+
+    const latestUserRow = usersList.find(u => String(u.user_id).trim() === String(user.user_id).trim()) || {};
+    const latestRosterRow = rosterList.find(r => String(r.user_id).trim() === String(user.user_id).trim()) || {};
+    const resolvedName = String(
+      latestUserRow.player_name
+      || user.player_name
+      || latestRosterRow.player_name
+      || user.name
+      || user.account
+      || user.user_id
+    ).trim();
+
+    user.name = resolvedName;
+    user.player_name = resolvedName;
+    window.currentUser = user;
+
+    document.getElementById('userNameDisplay').innerText = resolvedName;
+    document.getElementById('userTitleDisplay').innerText = user.title || '聯盟成員';
 
     const btnAuth = document.getElementById('btnAuthAction');
     btnAuth.className = "bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-xl transition border border-slate-700 flex items-center space-x-1";
     document.getElementById('btnAuthText').innerText = "登出";
 
-    const rosterList = (window.globalData && window.globalData.roster) || [];
-    const teamsList = (window.globalData && window.globalData.teams) || [];
-    const usersList = (window.globalData && window.globalData.users) || [];
-    const hasProfile = rosterList.some(r => String(r.user_id) === String(user.user_id))
-      || usersList.some(u => String(u.user_id) === String(user.user_id));
-
+    const hasProfile = Boolean(latestRosterRow.user_id || latestUserRow.user_id);
     const btnSelf = document.getElementById('btnOpenSelfProfile');
     if (hasProfile) {
       btnSelf.classList.remove('hidden');
@@ -292,6 +300,8 @@ const BBTAuth = {
 
     const btnRoleMgr = document.getElementById('btnOpenAdminRoleMgr');
     const btnCreateAcc = document.getElementById('btnOpenCreateAccount');
+    const btnCreateTeamSidebar = document.getElementById('btnSidebarCreateTeam');
+
     if (role === 'super_admin') {
       btnRoleMgr.classList.remove('hidden');
       btnRoleMgr.classList.add('flex');
@@ -299,9 +309,11 @@ const BBTAuth = {
         btnCreateAcc.classList.remove('hidden');
         btnCreateAcc.classList.add('flex');
       }
+      if (btnCreateTeamSidebar) btnCreateTeamSidebar.classList.remove('hidden');
     } else {
       btnRoleMgr.classList.add('hidden');
       btnRoleMgr.classList.remove('flex');
+      if (btnCreateTeamSidebar) btnCreateTeamSidebar.classList.add('hidden');
       if (btnCreateAcc && role === 'team_admin') {
         btnCreateAcc.classList.remove('hidden');
         btnCreateAcc.classList.add('flex');
@@ -326,13 +338,15 @@ const BBTAuth = {
       this.toggleManagementControls(true);
 
       if (typeof renderTeamSidebar === 'function') renderTeamSidebar();
+      if (typeof renderOverviewKpiBoard === 'function') renderOverviewKpiBoard();
+
       const filteredTeams = teamsList.filter(t => String(t.division).trim() === window.currentDivision);
-      if (filteredTeams.length > 0 && !window.currentSelectedTeamId) {
-        if (typeof selectTeam === 'function') selectTeam(filteredTeams[0].team_id);
-      } else if (window.currentSelectedTeamId) {
+      if (window.currentSelectedTeamId && teamsList.some(t => String(t.team_id) === String(window.currentSelectedTeamId))) {
         if (typeof selectTeam === 'function') selectTeam(window.currentSelectedTeamId);
-      } else if (teamsList.length > 0) {
-        if (typeof selectTeam === 'function') selectTeam(teamsList[0].team_id);
+      } else if (filteredTeams.length > 0) {
+        if (typeof selectTeam === 'function') selectTeam(filteredTeams[0].team_id);
+      } else if (typeof renderOverviewKpiBoard === 'function') {
+        renderOverviewKpiBoard();
       }
     } else {
       leftSidebar.classList.add('hidden');
@@ -343,6 +357,8 @@ const BBTAuth = {
       if (myTeam) {
         window.currentDivision = String(myTeam.division).trim() || window.currentDivision;
         if (typeof selectTeam === 'function') selectTeam(myTeam.team_id);
+      } else if (typeof renderOverviewKpiBoard === 'function') {
+        renderOverviewKpiBoard();
       }
 
       if (role === 'team_admin') {
@@ -397,7 +413,7 @@ const BBTAuth = {
       return;
     }
 
-    document.getElementById('selfName').value = (pObj && pObj.player_name) || (uObj && uObj.player_name) || user.name || '';
+    document.getElementById('selfName').value = (uObj && uObj.player_name) || (pObj && pObj.player_name) || user.name || '';
     document.getElementById('selfNumber').value = (pObj && pObj.number) ? `#${pObj.number}` : '由各隊登錄';
     document.getElementById('selfPosition').value = (pObj && pObj.position) || (uObj && uObj.position) || '';
     document.getElementById('selfBatThrow').value = (pObj && pObj.bat_throw) || (uObj && uObj.bat_throw) || '右投右打';
@@ -418,21 +434,12 @@ const BBTAuth = {
   async saveSelfProfile() {
     const user = this.getCurrentUser();
     if (!user) return;
-    const rosterList = (window.globalData && window.globalData.roster) || [];
-    const pObj = rosterList.find(r => String(r.user_id) === String(user.user_id));
-
     const position = document.getElementById('selfPosition').value.trim();
     const bat_throw = document.getElementById('selfBatThrow').value;
     const phone = document.getElementById('selfPhone').value.trim();
     const email = document.getElementById('selfEmail').value.trim();
     const note = document.getElementById('selfNote').value.trim();
     const newPwd = document.getElementById('selfNewPassword').value.trim();
-
-    if (pObj) {
-      pObj.position = position;
-      pObj.bat_throw = bat_throw;
-      pObj.phone = phone;
-    }
 
     if (newPwd) {
       const customPasswords = JSON.parse(localStorage.getItem(this.CUSTOM_PWD_KEY) || '{}');
@@ -526,7 +533,6 @@ const BBTAuth = {
   }
 };
 
-// 全域相容包裝，供 HTML 事件直接呼叫
 function submitLogin(e) { return BBTAuth.submitLogin(e); }
 function handleAuthButtonClick() { return BBTAuth.handleAuthButtonClick(); }
 function openSelfProfileModal() { return BBTAuth.openSelfProfileModal(); }
