@@ -16,8 +16,8 @@ window.globalData = globalData;
 
 let currentSelectedTeamId = '';
 window.currentSelectedTeamId = '';
-let currentDivision = '大聯盟';
-window.currentDivision = '大聯盟';
+let currentDivision = 'ALL'; // 'ALL' 表示全聯盟（未選組別）
+window.currentDivision = 'ALL';
 let currentSeason = '2026-S18';
 let currentRosterFilter = 'all';
 let activePlayerCardCache = null;
@@ -26,6 +26,7 @@ let globalGameCache = {};
 let currentUser = null;
 
 const REMOTE_SCHEDULE_SHEET_ID = '1kgJti-vuALVDPhVWHdb0G5_Ows4Usp61Y00L9JMrrmw';
+const DIVISION_ORDER = ['大聯盟', '小聯盟', '育成組'];
 
 document.addEventListener('DOMContentLoaded', async () => {
   await initSystem();
@@ -53,6 +54,7 @@ async function initSystem() {
     if (!restoredUser) {
       document.getElementById('userNameDisplay').innerText = '未登入';
       document.getElementById('userTitleDisplay').innerText = '請先登入系統';
+      syncDivisionButtonsUI();
       renderOverviewKpiBoard();
       if (typeof BBTAuth !== 'undefined' && typeof BBTAuth.openLoginModal === 'function') {
         BBTAuth.openLoginModal();
@@ -69,7 +71,10 @@ async function initSystem() {
       ? BBTAuth.getCurrentUser()
       : currentUser;
 
+    syncDivisionButtonsUI();
+    renderTeamSidebar(document.getElementById('teamSearchInput')?.value || '');
     renderOverviewKpiBoard();
+
     if (currentSelectedTeamId) {
       await loadRemoteScheduleOptions();
       renderAnnouncements();
@@ -82,7 +87,59 @@ async function initSystem() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-// --- 未選隊 KPI 總覽模式 ---
+// --- 同步頂部組別按鈕樣式 ---
+function syncDivisionButtonsUI() {
+  const btnMap = {
+    'ALL': 'btn-all',
+    '大聯盟': 'btn-maj',
+    '小聯盟': 'btn-min',
+    '育成組': 'btn-rok'
+  };
+  Object.entries(btnMap).forEach(([divKey, btnId]) => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    if (divKey === currentDivision) {
+      btn.className = 'px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition';
+    } else {
+      btn.className = 'px-3.5 py-1 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700/80 transition';
+    }
+  });
+}
+
+// --- 共用隊徽元件（僅圖示 + 備用字） ---
+function buildTeamLogoHtml(team, sizeClass = 'w-12 h-12 text-base') {
+  const teamNameStr = String(team.team_name || '').trim();
+  const fallbackChar = teamNameStr.length > 1 ? teamNameStr.substring(1, 2) : (teamNameStr.substring(0, 1) || 'B');
+  const logoPath = `logo/${team.team_id}.png`;
+  return `
+    <div class="${sizeClass} rounded-2xl overflow-hidden bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center shadow shrink-0">
+      <img src="${logoPath}" alt="${teamNameStr}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+      <span style="display:none;" class="w-full h-full items-center justify-center">${fallbackChar}</span>
+    </div>
+  `;
+}
+
+// --- 依組別分組球隊 ---
+function groupTeamsByDivision(teamsList) {
+  const groups = [];
+  const usedIds = new Set();
+
+  DIVISION_ORDER.forEach(divName => {
+    const matched = teamsList.filter(t => String(t.division || '').trim() === divName);
+    matched.forEach(t => usedIds.add(String(t.team_id)));
+    if (matched.length > 0) {
+      groups.push({ division: divName, teams: matched });
+    }
+  });
+
+  const others = teamsList.filter(t => !usedIds.has(String(t.team_id)));
+  if (others.length > 0) {
+    groups.push({ division: '其他組別', teams: others });
+  }
+  return groups;
+}
+
+// --- 未選隊 KPI 總覽與全球隊分組畫面 ---
 function showKpiOverview() {
   currentSelectedTeamId = '';
   window.currentSelectedTeamId = '';
@@ -114,20 +171,23 @@ function renderOverviewKpiBoard() {
   selectedSection.classList.add('hidden');
 
   const allTeams = globalData.teams || [];
-  const divTeams = allTeams.filter(t => String(t.division || '').trim() === currentDivision);
-  const divTeamIds = new Set(divTeams.map(t => String(t.team_id).trim()));
-
   const isSuper = currentUser && currentUser.role === 'super_admin';
-  const scopedTeams = isSuper ? divTeams : allTeams.filter(t => String(t.team_id).trim() === String(currentUser?.team_id || '').trim());
-  const scopedRoster = (globalData.roster || []).filter(r => isSuper ? divTeamIds.has(String(r.team_id).trim()) : String(r.team_id).trim() === String(currentUser?.team_id || '').trim());
-  const scopedAtt = (globalData.attendance || []).filter(a => isSuper ? divTeamIds.has(String(a.team_id).trim()) : String(a.team_id).trim() === String(currentUser?.team_id || '').trim());
+  const isAllDiv = currentDivision === 'ALL';
+
+  const scopedTeams = !isSuper
+    ? allTeams.filter(t => String(t.team_id).trim() === String(currentUser?.team_id || '').trim())
+    : (isAllDiv ? allTeams : allTeams.filter(t => String(t.division || '').trim() === currentDivision));
+
+  const scopedTeamIds = new Set(scopedTeams.map(t => String(t.team_id).trim()));
+  const scopedRoster = (globalData.roster || []).filter(r => scopedTeamIds.has(String(r.team_id).trim()));
+  const scopedAtt = (globalData.attendance || []).filter(a => scopedTeamIds.has(String(a.team_id).trim()));
   const pendingTxCount = (globalData.transactions || []).filter(tx => String(tx.admin_status || '').trim() === 'pending').length;
   const historyTotal = (globalData.history || []).length + (globalData.transactions || []).length;
 
   document.getElementById('kpiSeasonBadge').innerText = currentSeason;
-  document.getElementById('kpiSectionTitle').innerText = isSuper
-    ? `${currentDivision} — 賽季即時 KPI 總覽`
-    : '我的球隊與賽季即時 KPI 總覽';
+  document.getElementById('kpiSectionTitle').innerText = !isSuper
+    ? '我的球隊與賽季即時 KPI 總覽'
+    : (isAllDiv ? '全聯盟 — 全球隊與賽季即時 KPI 總覽' : `${currentDivision} — 賽季即時 KPI 總覽`);
 
   document.getElementById('kpiTeamCount').innerText = scopedTeams.length;
   document.getElementById('kpiTotalTeamSub').innerText = `全聯盟共 ${allTeams.length} 隊`;
@@ -142,16 +202,49 @@ function renderOverviewKpiBoard() {
     btnKpiCreate.classList.toggle('hidden', !isSuper);
   }
 
+  // 隱藏原本純文字快速按鈕（改以下方隊圖 + 隊名卡片呈現）
   const chipsEl = document.getElementById('kpiQuickTeamChips');
   if (chipsEl) {
+    chipsEl.classList.add('hidden');
+  }
+
+  // 渲染依組別區分的隊圖 + 隊名卡片牆
+  let boardEl = document.getElementById('allTeamsDivisionBoard');
+  if (!boardEl && chipsEl && chipsEl.parentElement) {
+    boardEl = document.createElement('div');
+    boardEl.id = 'allTeamsDivisionBoard';
+    boardEl.className = 'mt-5 pt-4 border-t border-slate-100 space-y-5';
+    chipsEl.parentElement.appendChild(boardEl);
+  }
+
+  if (boardEl) {
     if (scopedTeams.length === 0) {
-      chipsEl.innerHTML = `<span class="text-xs text-slate-400">此組別目前尚無球隊，可點擊上方「新增球隊」建立。</span>`;
+      boardEl.innerHTML = `<div class="text-xs text-slate-400 py-4 text-center">目前尚無球隊資料，可點擊上方「+ 新增球隊」建立。</div>`;
     } else {
-      chipsEl.innerHTML = `<span class="text-[11px] font-bold text-slate-500 self-center mr-1">快速進入球隊：</span>` + scopedTeams.map(t =>
-        `<button onclick="selectTeam('${t.team_id}')" class="bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-800 text-xs font-bold px-3 py-1.5 rounded-xl transition">${t.team_name}</button>`
-      ).join('');
+      const grouped = groupTeamsByDivision(scopedTeams);
+      boardEl.innerHTML = grouped.map(grp => `
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <h4 class="text-xs font-black text-slate-800 tracking-wide">${grp.division}組</h4>
+              <span class="text-[11px] font-bold text-slate-400">(${grp.teams.length} 隊)</span>
+            </div>
+            <span class="text-[11px] text-slate-400">點選球隊檢視編制與球員詳細資料</span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            ${grp.teams.map(t => `
+              <button onclick="selectTeam('${t.team_id}')" class="group bg-slate-50 hover:bg-slate-900 border border-slate-200 hover:border-emerald-500 rounded-2xl p-4 flex flex-col items-center justify-center gap-2.5 transition shadow-sm hover:shadow-md text-center">
+                ${buildTeamLogoHtml(t, 'w-14 h-14 text-lg')}
+                <div class="font-black text-sm text-slate-900 group-hover:text-white truncate w-full">${t.team_name}</div>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `).join('');
     }
   }
+
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -159,7 +252,7 @@ function renderOverviewKpiBoard() {
 function openCreateTeamModal() {
   document.getElementById('newTeamName').value = '';
   document.getElementById('newTeamId').value = '';
-  document.getElementById('newTeamDivision').value = currentDivision || '大聯盟';
+  document.getElementById('newTeamDivision').value = (currentDivision && currentDivision !== 'ALL') ? currentDivision : '大聯盟';
   document.getElementById('newTeamSeason').value = currentSeason || '2026-S18';
   document.getElementById('newTeamCoach').value = '';
   document.getElementById('newTeamContact').value = '';
@@ -410,7 +503,7 @@ async function enrollExistingUserToTeam() {
   }
 }
 
-// --- 精準依 roster_id 編輯球員 ---
+// --- 精準依 roster_id 編輯球員（異動） ---
 function openEditRosterModal(userId, rosterId = '') {
   if (!currentSelectedTeamId) {
     alert('請先選擇球隊');
@@ -426,6 +519,15 @@ function openEditRosterModal(userId, rosterId = '') {
 
   if (!pObj) return;
 
+  const modalEl = document.getElementById('editRosterModal');
+  if (modalEl) {
+    const titleEl = modalEl.querySelector('h3');
+    if (titleEl) titleEl.innerText = '編輯球員';
+    const btns = modalEl.querySelectorAll('button');
+    const saveBtn = Array.from(btns).find(b => b.textContent && b.textContent.includes('儲存'));
+    if (saveBtn) saveBtn.innerText = '儲存';
+  }
+
   const hiddenRosterIdEl = document.getElementById('editRosterId');
   if (hiddenRosterIdEl) {
     hiddenRosterIdEl.value = pObj.roster_id || '';
@@ -440,8 +542,8 @@ function openEditRosterModal(userId, rosterId = '') {
   document.getElementById('editRosterPosition').value = pObj.position || '';
   document.getElementById('editRosterStatus').value = pObj.status || 'approved';
 
-  document.getElementById('editRosterModal').classList.remove('hidden');
-  document.getElementById('editRosterModal').classList.add('flex');
+  modalEl.classList.remove('hidden');
+  modalEl.classList.add('flex');
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -489,57 +591,68 @@ async function submitEditRoster() {
   });
 
   if (res && res.result === 'ok') {
-    alert(`✅ 已更新 ${playerName || userId} 的背號為 #${numberVal || '—'}！`);
+    alert(`✅ 已儲存 ${playerName || userId} 的異動資料${numberVal ? `（#${numberVal}）` : ''}！`);
     closeEditRosterModal();
     await initSystem();
   } else {
-    alert('❌ 更新背號失敗: ' + (res && res.message ? res.message : ''));
+    alert('❌ 儲存失敗: ' + (res && res.message ? res.message : ''));
   }
 }
 
+// --- 左側聯盟球隊清單（依組別區分，精簡只顯示隊圖 + 隊名） ---
 function renderTeamSidebar(searchKeyword = '') {
   const container = document.getElementById('teamSidebarContainer');
+  const isAllDiv = currentDivision === 'ALL';
+
   const filtered = globalData.teams.filter(t => {
-    const matchDiv = String(t.division).trim() === currentDivision;
-    const matchKey = !searchKeyword || t.team_name.includes(searchKeyword) || (t.coach && t.coach.includes(searchKeyword));
+    const matchDiv = isAllDiv || String(t.division || '').trim() === currentDivision;
+    const matchKey = !searchKeyword || String(t.team_name || '').includes(searchKeyword);
     return matchDiv && matchKey;
   });
 
-  document.getElementById('teamCountBadge').innerText = `${currentDivision} · ${filtered.length} 隊`;
+  document.getElementById('teamCountBadge').innerText = isAllDiv
+    ? `全聯盟 · ${filtered.length} 隊`
+    : `${currentDivision} · ${filtered.length} 隊`;
 
   if (filtered.length === 0) {
-    container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">此組別目前尚無球隊，可點選上方「+ 新增球隊」</div>`;
+    container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">目前尚無符合的球隊，可點選上方「+ 新增球隊」</div>`;
     return;
   }
 
-  container.innerHTML = filtered.map(t => {
+  const renderCard = (t) => {
     const isSelected = String(t.team_id) === String(currentSelectedTeamId);
-    const cardStyle = isSelected ? 'bg-slate-900 text-white border-2 border-emerald-500 shadow-md' : 'bg-white hover:bg-slate-50 border border-slate-200';
-    const rosterLen = globalData.roster.filter(r => String(r.team_id) === String(t.team_id)).length;
-
-    const teamNameStr = String(t.team_name || '').trim();
-    const fallbackChar = teamNameStr.length > 1 ? teamNameStr.substring(1, 2) : (teamNameStr.substring(0, 1) || 'B');
-    const logoPath = `logo/${t.team_id}.png`;
+    const cardStyle = isSelected
+      ? 'bg-slate-900 text-white border-2 border-emerald-500 shadow-md'
+      : 'bg-white hover:bg-slate-50 border border-slate-200 text-slate-900';
 
     return `
-      <div onclick="selectTeam('${t.team_id}')" class="team-card p-3 ${cardStyle} rounded-xl cursor-pointer transition flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl overflow-hidden bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center text-xs shadow shrink-0">
-            <img src="${logoPath}" alt="${t.team_name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-            <span style="display:none;" class="w-full h-full items-center justify-center">${fallbackChar}</span>
-          </div>
-          <div>
-            <div class="font-black text-sm flex items-center gap-1.5">
-              <span>${t.team_name}</span>
-              <span class="bg-emerald-500 text-slate-900 text-[9px] font-black px-1.5 py-0.2 rounded">現役</span>
-            </div>
-            <div class="text-[11px] ${isSelected ? 'text-slate-300' : 'text-slate-400'}">教練：${t.coach || '—'} · 名單 ${rosterLen} 人</div>
-          </div>
+      <div onclick="selectTeam('${t.team_id}')" class="team-card p-2.5 ${cardStyle} rounded-xl cursor-pointer transition flex items-center justify-between">
+        <div class="flex items-center space-x-3 min-w-0">
+          ${buildTeamLogoHtml(t, 'w-10 h-10 text-xs')}
+          <div class="font-black text-sm truncate">${t.team_name}</div>
         </div>
-        <i data-lucide="chevron-right" class="w-4 h-4 ${isSelected ? 'text-emerald-400' : 'text-slate-300'}"></i>
+        <i data-lucide="chevron-right" class="w-4 h-4 shrink-0 ${isSelected ? 'text-emerald-400' : 'text-slate-300'}"></i>
       </div>
     `;
-  }).join('');
+  };
+
+  if (isAllDiv) {
+    const grouped = groupTeamsByDivision(filtered);
+    container.innerHTML = grouped.map(grp => `
+      <div class="space-y-1.5 pt-1 first:pt-0">
+        <div class="px-1 flex items-center justify-between text-[11px] font-black text-slate-400">
+          <span>${grp.division}組</span>
+          <span>${grp.teams.length} 隊</span>
+        </div>
+        <div class="space-y-1.5">
+          ${grp.teams.map(renderCard).join('')}
+        </div>
+      </div>
+    `).join('');
+  } else {
+    container.innerHTML = filtered.map(renderCard).join('');
+  }
+
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -670,6 +783,9 @@ async function loadRemoteScheduleOptions() {
   if (res && res.result === 'ok' && res.schedule && res.schedule.length > 0) {
     const currentTeam = globalData.teams.find(t => String(t.team_id) === String(currentSelectedTeamId));
     const teamName = currentTeam ? String(currentTeam.team_name).trim() : '';
+    const activeDiv = (currentDivision && currentDivision !== 'ALL')
+      ? currentDivision
+      : String(currentTeam?.division || '').trim();
 
     const now = new Date();
     const dayOfWeek = now.getDay();
@@ -684,10 +800,10 @@ async function loadRemoteScheduleOptions() {
       const homeTeam = String(g.home_team || '').trim();
       const awayTeam = String(g.away_team || '').trim();
 
-      const matchDiv = !currentDivision ||
-                       gameCategory.includes(currentDivision) ||
-                       (currentDivision === '大聯盟' && gameCategory.toLowerCase().includes('major')) ||
-                       (currentDivision === '小聯盟' && gameCategory.toLowerCase().includes('minor'));
+      const matchDiv = !activeDiv ||
+                       gameCategory.includes(activeDiv) ||
+                       (activeDiv === '大聯盟' && gameCategory.toLowerCase().includes('major')) ||
+                       (activeDiv === '小聯盟' && gameCategory.toLowerCase().includes('minor'));
 
       const matchTeam = !teamName || homeTeam.includes(teamName) || awayTeam.includes(teamName);
 
@@ -1265,11 +1381,7 @@ function switchDiv(divName) {
   if (currentUser && currentUser.role !== 'super_admin') return;
   currentDivision = divName;
   window.currentDivision = divName;
-  ['maj', 'min', 'rok'].forEach(k => {
-    document.getElementById('btn-' + k).className = "px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition";
-  });
-  const activeMap = { '大聯盟': 'maj', '小聯盟': 'min', '育成組': 'rok' };
-  document.getElementById('btn-' + activeMap[divName]).className = "px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition";
+  syncDivisionButtonsUI();
 
   currentSelectedTeamId = '';
   window.currentSelectedTeamId = '';
