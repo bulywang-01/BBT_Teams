@@ -453,6 +453,7 @@ async function submitEditRoster() {
   ) || {};
 
   const res = await BBTApi.saveRoster({
+    ...(existing.roster_id ? { roster_id: existing.roster_id } : {}),
     team_id: currentSelectedTeamId,
     user_id: userId,
     player_name: playerName || existing.player_name || userId,
