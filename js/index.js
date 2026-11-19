@@ -3281,7 +3281,7 @@ function renderSeasonDropdowns_() {
   }
 }
 
-// --- 聯盟球季管理 Modal（支援新增、修改名稱／年度／狀態與設為現行賽季） ---
+// --- 聯盟球季管理 Modal（新增與儲存異動獨立按鈕，互不干擾） ---
 let editingSeasonOriginalId_ = '';
 
 function ensureSeasonManagerModal_() {
@@ -3295,7 +3295,7 @@ function ensureSeasonManagerModal_() {
       <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
         <div class="font-black text-sm flex items-center gap-2 whitespace-nowrap">
           <i data-lucide="calendar-range" class="w-4 h-4 text-emerald-400"></i>
-          <span>球季清單管理（新增／異動／現行賽季）</span>
+          <span>聯盟球季清單管理</span>
         </div>
         <button type="button" onclick="closeSeasonManagerModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 whitespace-nowrap">✕</button>
       </div>
@@ -3303,21 +3303,21 @@ function ensureSeasonManagerModal_() {
       <div class="p-4 overflow-y-auto space-y-4 text-xs">
         <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
           <div class="flex items-center justify-between gap-2">
-            <span id="seasonFormModeTitle" class="font-black text-slate-900">新增球季</span>
-            <button type="button" onclick="resetSeasonFormToCreate_()" class="text-[11px] font-bold text-emerald-700 hover:underline whitespace-nowrap">+ 清空為新增模式</button>
+            <span id="seasonFormModeTitle" class="font-black text-slate-900">球季設定（可獨立新增或儲存異動）</span>
+            <button type="button" onclick="resetSeasonFormToCreate_()" class="text-[11px] font-bold text-slate-600 hover:text-slate-900 underline whitespace-nowrap">清空欄位</button>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
-              <label class="block text-[11px] font-bold text-slate-600 mb-1">球季代碼 (season_id)</label>
+              <label class="block text-[11px] font-bold text-slate-600 mb-1">球季代碼 *</label>
               <input id="newSeasonIdInput" type="text" placeholder="例如 2026-S19" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
             </div>
             <div>
-              <label class="block text-[11px] font-bold text-slate-600 mb-1">顯示名稱</label>
+              <label class="block text-[11px] font-bold text-slate-600 mb-1">球季顯示名稱 *</label>
               <input id="newSeasonNameInput" type="text" placeholder="例如 2026 第 19 季" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
             </div>
             <div>
-              <label class="block text-[11px] font-bold text-slate-600 mb-1">所屬年度</label>
+              <label class="block text-[11px] font-bold text-slate-600 mb-1">年度</label>
               <input id="newSeasonYearInput" type="number" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
             </div>
           </div>
@@ -3333,12 +3333,15 @@ function ensureSeasonManagerModal_() {
                 <span class="font-bold text-slate-700">帶入現有球隊名單</span>
               </label>
             </div>
-            <button type="button" id="btnSubmitSeasonForm" onclick="submitNewSeason()" class="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs whitespace-nowrap">儲存球季</button>
+            <div class="flex items-center gap-2 shrink-0">
+              <button type="button" id="btnCreateNewSeason" onclick="submitCreateNewSeason()" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs whitespace-nowrap">+ 新增球季</button>
+              <button type="button" id="btnSaveSeasonEdit" onclick="submitSaveEditedSeason()" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs whitespace-nowrap">儲存異動</button>
+            </div>
           </div>
         </div>
 
         <div class="space-y-2">
-          <div class="font-black text-slate-900">已建立球季清單（可點選「異動」修改或「設為現行賽季」）</div>
+          <div class="font-black text-slate-900">已建立球季清單</div>
           <div id="seasonManagerListContainer" class="space-y-2"></div>
         </div>
       </div>
@@ -3354,15 +3357,13 @@ function resetSeasonFormToCreate_() {
   const nextYear = new Date().getFullYear();
 
   const titleEl = document.getElementById('seasonFormModeTitle');
-  const submitBtn = document.getElementById('btnSubmitSeasonForm');
   const idInput = document.getElementById('newSeasonIdInput');
   const nameInput = document.getElementById('newSeasonNameInput');
   const yearInput = document.getElementById('newSeasonYearInput');
   const curInput = document.getElementById('newSeasonIsCurrentInput');
   const carryInput = document.getElementById('newSeasonCarryOverTeamsInput');
 
-  if (titleEl) titleEl.innerText = '新增球季';
-  if (submitBtn) submitBtn.innerText = '儲存新增';
+  if (titleEl) titleEl.innerText = '球季設定（可獨立新增或儲存異動）';
   if (idInput) {
     idInput.value = `${nextYear}-S${nextNum}`;
     idInput.disabled = false;
@@ -3380,14 +3381,12 @@ function startEditSeason_(seasonId) {
   editingSeasonOriginalId_ = s.season_id;
 
   const titleEl = document.getElementById('seasonFormModeTitle');
-  const submitBtn = document.getElementById('btnSubmitSeasonForm');
   const idInput = document.getElementById('newSeasonIdInput');
   const nameInput = document.getElementById('newSeasonNameInput');
   const yearInput = document.getElementById('newSeasonYearInput');
   const curInput = document.getElementById('newSeasonIsCurrentInput');
 
-  if (titleEl) titleEl.innerText = `異動球季：${s.season_id}`;
-  if (submitBtn) submitBtn.innerText = '儲存異動';
+  if (titleEl) titleEl.innerText = `正在異動：${s.season_id}（可直接點「儲存異動」，或改完代碼點「+ 新增球季」）`;
   if (idInput) {
     idInput.value = s.season_id;
     idInput.disabled = false;
@@ -3459,7 +3458,7 @@ function renderSeasonManagerList_() {
         <div class="text-[11px] text-slate-400 mt-0.5">年度：${s.year}</div>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
-        <button type="button" onclick="startEditSeason_('${String(s.season_id).replace(/'/g, "\'")}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] whitespace-nowrap">
+        <button type="button" onclick="startEditSeason_('${String(s.season_id).replace(/'/g, "'")}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] whitespace-nowrap">
           異動
         </button>
       </div>
@@ -3467,20 +3466,131 @@ function renderSeasonManagerList_() {
   `).join('');
 }
 
-async function submitNewSeason() {
-  const originalSeasonId = String(editingSeasonOriginalId_ || '').trim();
-  const isEditing = Boolean(originalSeasonId);
-  const seasonIdInputEl = document.getElementById('newSeasonIdInput');
-  const seasonNameInputEl = document.getElementById('newSeasonNameInput');
-  const yearInputEl = document.getElementById('newSeasonYearInput');
-  const isCurrentInputEl = document.getElementById('newSeasonIsCurrentInput');
-  const carryInputEl = document.getElementById('newSeasonCarryOverTeamsInput');
+async function syncAfterSeasonSave_(payload, isEditing, originalSeasonId) {
+  let res = { result: 'ok' };
+  if (typeof BBTApi !== 'undefined' && typeof BBTApi.saveSeason === 'function') {
+    res = await BBTApi.saveSeason(payload);
+  } else if (typeof callApi === 'function') {
+    res = await callApi('saveSeason', payload);
+  }
 
-  const seasonId = String(seasonIdInputEl ? seasonIdInputEl.value : '').trim();
-  const seasonName = String(seasonNameInputEl ? seasonNameInputEl.value : '').trim();
-  const yearVal = Number(yearInputEl ? yearInputEl.value : '') || new Date().getFullYear();
-  const isCurrent = Boolean(isCurrentInputEl && isCurrentInputEl.checked);
-  const carryOverTeams = isEditing ? false : Boolean(carryInputEl && carryInputEl.checked);
+  if (!res || res.result !== 'ok') {
+    alert('❌ 儲存球季失敗：' + (res && res.message ? res.message : '未知錯誤'));
+    return;
+  }
+
+  const seasonId = payload.season_id;
+  const seasonName = payload.season_name;
+  const yearVal = payload.year;
+  const isCurrent = payload.is_current;
+
+  const existingList = getNormalizedSeasonsList_();
+  const prevItem = existingList.find(
+    item => String(item.season_id).trim() === (isEditing ? originalSeasonId : seasonId)
+  );
+  const nextItem = {
+    ...(prevItem || {}),
+    season_id: seasonId,
+    season_name: seasonName,
+    year: yearVal,
+    is_current: isCurrent,
+    status: (prevItem && prevItem.status) || 'active'
+  };
+
+  const nextList = [];
+  let replaced = false;
+  existingList.forEach(item => {
+    const sid = String(item.season_id).trim();
+    if (isEditing && (sid === originalSeasonId || sid === seasonId)) {
+      if (!replaced) {
+        nextList.push(nextItem);
+        replaced = true;
+      }
+    } else if (!isEditing && sid === seasonId) {
+      if (!replaced) {
+        nextList.push(nextItem);
+        replaced = true;
+      }
+    } else {
+      nextList.push({ ...item });
+    }
+  });
+  if (!replaced) {
+    if (isEditing) {
+      nextList.unshift(nextItem);
+    } else {
+      nextList.push(nextItem);
+    }
+  }
+
+  globalData.seasons = nextList;
+  window.globalData = globalData;
+
+  if (isEditing && currentSeason === originalSeasonId) {
+    currentSeason = seasonId;
+  } else if (!isEditing && isCurrent) {
+    currentSeason = seasonId;
+  }
+
+  renderSeasonDropdowns_();
+  renderSeasonManagerList_();
+  if (!isEditing) {
+    resetSeasonFormToCreate_();
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+
+  if (typeof showActionStatus === 'function') {
+    showActionStatus(
+      isEditing ? `已儲存球季「${seasonName}」異動` : `已新增球季「${seasonName}」`,
+      'success',
+      2400
+    );
+  }
+
+  if (typeof BBTApi !== 'undefined' && typeof BBTApi.getInitData === 'function') {
+    const freshRes = await BBTApi.getInitData(currentSeason, currentSelectedTeamId || '');
+    if (freshRes && freshRes.result === 'ok') {
+      const localSeasonsSnapshot = [...(globalData.seasons || [])];
+      globalData.teams = freshRes.teams || globalData.teams;
+      globalData.roster = freshRes.roster || globalData.roster;
+      globalData.stats = freshRes.stats || globalData.stats;
+      globalData.announcements = freshRes.announcements || globalData.announcements;
+      globalData.league_announcements = freshRes.league_announcements || globalData.league_announcements;
+      globalData.transactions = freshRes.transactions || globalData.transactions;
+      globalData.attendance = freshRes.attendance || globalData.attendance;
+      globalData.users = freshRes.users || globalData.users;
+      globalData.history = freshRes.history || globalData.history;
+      if (Array.isArray(freshRes.seasons) && freshRes.seasons.length > 0) {
+        const freshMap = new Map(freshRes.seasons.map(s => [String(s.season_id).trim(), s]));
+        localSeasonsSnapshot.forEach(loc => {
+          const key = String(loc.season_id).trim();
+          if (key === seasonId || (isEditing && key === originalSeasonId)) {
+            freshMap.set(seasonId, { ...(freshMap.get(seasonId) || {}), ...loc });
+            if (isEditing && originalSeasonId !== seasonId) {
+              freshMap.delete(originalSeasonId);
+            }
+          }
+        });
+        globalData.seasons = Array.from(freshMap.values());
+      }
+      window.globalData = globalData;
+      renderSeasonDropdowns_();
+      renderSeasonManagerList_();
+      if (typeof renderOverviewKpiBoard === 'function') renderOverviewKpiBoard();
+      if (typeof renderTeamSidebar === 'function') {
+        renderTeamSidebar(document.getElementById('teamSearchInput')?.value || '');
+      }
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+  }
+}
+
+async function submitCreateNewSeason() {
+  const seasonId = String(document.getElementById('newSeasonIdInput')?.value || '').trim();
+  const seasonName = String(document.getElementById('newSeasonNameInput')?.value || '').trim();
+  const yearVal = Number(document.getElementById('newSeasonYearInput')?.value || '') || new Date().getFullYear();
+  const isCurrent = Boolean(document.getElementById('newSeasonIsCurrentInput')?.checked);
+  const carryOverTeams = Boolean(document.getElementById('newSeasonCarryOverTeamsInput')?.checked);
 
   if (!seasonId || !seasonName) {
     alert('請填寫球季代碼與球季顯示名稱');
@@ -3490,137 +3600,60 @@ async function submitNewSeason() {
   const payload = {
     season_id: seasonId,
     new_season_id: seasonId,
-    original_season_id: isEditing ? originalSeasonId : '',
-    prev_season_id: isEditing ? originalSeasonId : '',
+    original_season_id: '',
+    prev_season_id: '',
     season_name: seasonName,
     year: yearVal,
     is_current: isCurrent,
-    action_mode: isEditing ? 'update' : 'create',
-    mode: isEditing ? 'update' : 'create',
-    is_update: isEditing,
+    action_mode: 'create',
+    mode: 'create',
+    is_update: false,
     carry_over_teams: carryOverTeams,
     from_season: currentSeason
   };
 
-  let res = { result: 'ok' };
-  if (typeof BBTApi !== 'undefined' && typeof BBTApi.saveSeason === 'function') {
-    res = await BBTApi.saveSeason(payload);
-  } else if (typeof callApi === 'function') {
-    res = await callApi('saveSeason', payload);
+  await syncAfterSeasonSave_(payload, false, '');
+}
+
+async function submitSaveEditedSeason() {
+  const seasonId = String(document.getElementById('newSeasonIdInput')?.value || '').trim();
+  const seasonName = String(document.getElementById('newSeasonNameInput')?.value || '').trim();
+  const yearVal = Number(document.getElementById('newSeasonYearInput')?.value || '') || new Date().getFullYear();
+  const isCurrent = Boolean(document.getElementById('newSeasonIsCurrentInput')?.checked);
+  const carryOverTeams = Boolean(document.getElementById('newSeasonCarryOverTeamsInput')?.checked);
+  const originalSeasonId = String(editingSeasonOriginalId_ || seasonId).trim();
+
+  if (!seasonId || !seasonName) {
+    alert('請填寫球季代碼與球季顯示名稱');
+    return;
   }
 
-  if (res && res.result === 'ok') {
-    // 1. 立即同步前端本地 seasons 清單（修改時原地更新並移除舊 ID 殘留，絕不重複新增）
-    const existingList = getNormalizedSeasonsList_();
-    const matchKey = isEditing ? originalSeasonId : seasonId;
-    const foundIdx = existingList.findIndex(
-      item => String(item.season_id).trim() === matchKey || String(item.season_id).trim() === seasonId
-    );
+  const payload = {
+    season_id: seasonId,
+    new_season_id: seasonId,
+    original_season_id: originalSeasonId,
+    prev_season_id: originalSeasonId,
+    season_name: seasonName,
+    year: yearVal,
+    is_current: isCurrent,
+    action_mode: 'update',
+    mode: 'update',
+    is_update: true,
+    carry_over_teams: carryOverTeams,
+    from_season: currentSeason
+  };
 
-    const prevItem = foundIdx >= 0 ? existingList[foundIdx] : null;
-    const nextItem = {
-      ...(prevItem || {}),
-      season_id: seasonId,
-      season_name: seasonName,
-      year: yearVal,
-      is_current: isCurrentInputEl ? isCurrent : (prevItem ? prevItem.is_current : true),
-      status: (prevItem && prevItem.status) || 'active'
-    };
+  await syncAfterSeasonSave_(payload, true, originalSeasonId);
+}
 
-    const nextList = [];
-    let replaced = false;
-    existingList.forEach(item => {
-      const sid = String(item.season_id).trim();
-      if (isEditing && (sid === originalSeasonId || sid === seasonId)) {
-        if (!replaced) {
-          nextList.push(nextItem);
-          replaced = true;
-        }
-      } else if (!isEditing && sid === seasonId) {
-        if (!replaced) {
-          nextList.push(nextItem);
-          replaced = true;
-        }
-      } else {
-        nextList.push({ ...item });
-      }
-    });
-    if (!replaced) {
-      nextList.unshift(nextItem);
-    }
-
-    globalData.seasons = nextList;
-    window.globalData = globalData;
-
-    // 若目前選中的球季是被修改的球季（或設為現行賽季），同步更新 currentSeason
-    if (isEditing && currentSeason === originalSeasonId) {
-      currentSeason = seasonId;
-    } else if (!isEditing && isCurrent) {
-      currentSeason = seasonId;
-    }
-
-    // 2. 立刻刷新下拉選單與清單卡片，讓使用者當下看到最新修改結果
-    renderSeasonDropdowns_();
-    renderSeasonManagerList_();
-    if (isEditing) {
-      editingSeasonOriginalId_ = seasonId;
-      const titleEl = document.getElementById('seasonFormModeTitle');
-      if (titleEl) titleEl.innerText = `異動球季：${seasonId}（已更新）`;
-    } else {
-      resetSeasonFormToCreate_();
-    }
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-
-    if (typeof showActionStatus === 'function') {
-      showActionStatus(
-        isEditing ? `已更新球季「${seasonName}」並同步畫面` : `已新增球季「${seasonName}」並同步畫面`,
-        'success',
-        2400
-      );
-    }
-
-    // 3. 背景向後端拉取最新資料並重繪主畫面，同時保持「球季清單管理」Modal 打開讓使用者確認
-    if (typeof BBTApi !== 'undefined' && typeof BBTApi.getInitData === 'function') {
-      const freshRes = await BBTApi.getInitData(currentSeason, currentSelectedTeamId || '');
-      if (freshRes && freshRes.result === 'ok') {
-        const localSeasonsSnapshot = [...(globalData.seasons || [])];
-        globalData.teams = freshRes.teams || globalData.teams;
-        globalData.roster = freshRes.roster || globalData.roster;
-        globalData.stats = freshRes.stats || globalData.stats;
-        globalData.announcements = freshRes.announcements || globalData.announcements;
-        globalData.league_announcements = freshRes.league_announcements || globalData.league_announcements;
-        globalData.transactions = freshRes.transactions || globalData.transactions;
-        globalData.attendance = freshRes.attendance || globalData.attendance;
-        globalData.users = freshRes.users || globalData.users;
-        globalData.history = freshRes.history || globalData.history;
-        if (Array.isArray(freshRes.seasons) && freshRes.seasons.length > 0) {
-          // 防止後端剛寫入尚未反映到同一列時被舊資料覆蓋，優先保留已修改的 season_name/year/is_current
-          const freshMap = new Map(freshRes.seasons.map(s => [String(s.season_id).trim(), s]));
-          localSeasonsSnapshot.forEach(loc => {
-            const key = String(loc.season_id).trim();
-            if (key === seasonId || (isEditing && key === originalSeasonId)) {
-              freshMap.set(seasonId, { ...(freshMap.get(seasonId) || {}), ...loc });
-              if (isEditing && originalSeasonId !== seasonId) {
-                freshMap.delete(originalSeasonId);
-              }
-            }
-          });
-          globalData.seasons = Array.from(freshMap.values());
-        }
-        window.globalData = globalData;
-        renderSeasonDropdowns_();
-        renderSeasonManagerList_();
-        if (typeof renderOverviewKpiBoard === 'function') renderOverviewKpiBoard();
-        if (typeof renderTeamSidebar === 'function') {
-          renderTeamSidebar(document.getElementById('teamSearchInput')?.value || '');
-        }
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      }
-    }
+async function submitNewSeason() {
+  if (editingSeasonOriginalId_) {
+    await submitSaveEditedSeason();
   } else {
-    alert('❌ 儲存球季失敗：' + (res && res.message ? res.message : '未知錯誤'));
+    await submitCreateNewSeason();
   }
 }
+
 async function setAsCurrentSeason(seasonId) {
   const target = getNormalizedSeasonsList_().find(s => s.season_id === seasonId);
   if (!target) return;
