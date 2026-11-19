@@ -226,12 +226,64 @@ function getFaWindowConfig_() {
   }
 }
 
+let faWindowConfigCache_ = null;
+
 function saveFaWindowConfig_(cfg) {
-  localStorage.setItem(FA_WINDOW_STORAGE_KEY, JSON.stringify(cfg));
+  const normalized = {
+    enabled: Boolean(cfg.enabled),
+    startDate: String(cfg.startDate || '').trim(),
+    endDate: String(cfg.endDate || '').trim(),
+    label: String(cfg.label || `${currentSeason} 年度 FA 申請期間`).trim()
+  };
+  faWindowConfigCache_ = normalized;
+  try {
+    localStorage.setItem(FA_WINDOW_STORAGE_KEY, JSON.stringify(normalized));
+  } catch (err) {
+    // 忽略儲存空間限制錯誤，仍保留記憶體快取
+  }
 }
 
-function checkFaWindowStatus_(nowDate = new Date()) {
+function getEffectiveFaWindowConfig_() {
+  if (faWindowConfigCache_) {
+    return { ...faWindowConfigCache_ };
+  }
   const cfg = getFaWindowConfig_();
+  faWindowConfigCache_ = { ...cfg };
+  return cfg;
+}
+
+function syncFaWindowUiImmediately_(cfg) {
+  const winStatus = checkFaWindowStatus_(new Date(), cfg);
+  const enabledEl = document.getElementById('faWindowEnabledInput');
+  const startEl = document.getElementById('faWindowStartInput');
+  const endEl = document.getElementById('faWindowEndInput');
+  const badgeEl = document.getElementById('faWindowStatusBadge');
+  const kpiCard = document.getElementById('kpiAnnualFaCard');
+
+  if (enabledEl) enabledEl.checked = Boolean(cfg.enabled);
+  if (startEl) startEl.value = cfg.startDate || '';
+  if (endEl) endEl.value = cfg.endDate || '';
+
+  if (badgeEl) {
+    badgeEl.innerText = winStatus.isOpen ? '目前開放申請' : '目前未開放';
+    badgeEl.className = winStatus.isOpen
+      ? 'px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 whitespace-nowrap'
+      : 'px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 whitespace-nowrap';
+  }
+
+  if (kpiCard) {
+    const subEl = kpiCard.querySelector('.text-\[11px\].text-slate-400');
+    if (subEl) {
+      const text = subEl.innerText || '';
+      subEl.innerText = text.includes('·')
+        ? `${text.split('·')[0].trim()} · ${winStatus.isOpen ? '申請開放中' : '申請未開放'}`
+        : (winStatus.isOpen ? '申請開放中' : '申請未開放');
+    }
+  }
+}
+
+function checkFaWindowStatus_(nowDate = new Date(), overrideCfg = null) {
+  const cfg = overrideCfg || getEffectiveFaWindowConfig_();
   if (!cfg.enabled) {
     return {
       isOpen: false,
@@ -323,8 +375,8 @@ function ensureLeagueFaCenterModal_() {
   document.body.appendChild(modal);
 }
 
-function refreshLeagueFaCenterContent_() {
-  const cfg = getFaWindowConfig_();
+function refreshLeagueFaCenterContent_(overrideCfg = null) {
+  const cfg = overrideCfg || getEffectiveFaWindowConfig_();
   const winStatus = checkFaWindowStatus_();
 
   const enabledEl = document.getElementById('faWindowEnabledInput');
@@ -406,6 +458,7 @@ function openLeagueFaCenterModal() {
   }
   ensureLeagueFaCenterModal_();
   refreshLeagueFaCenterContent_();
+  bindFaWindowInstantListeners_();
   const modal = document.getElementById('leagueFaCenterModal');
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -419,23 +472,52 @@ function closeLeagueFaCenterModal() {
   modal.classList.remove('flex');
 }
 
+function applyFaWindowDraftChange_() {
+  const enabledEl = document.getElementById('faWindowEnabledInput');
+  const startEl = document.getElementById('faWindowStartInput');
+  const endEl = document.getElementById('faWindowEndInput');
+  const draft = {
+    enabled: Boolean(enabledEl?.checked),
+    startDate: String(startEl?.value || '').trim(),
+    endDate: String(endEl?.value || '').trim(),
+    label: `${currentSeason} 年度 FA 申請期間`
+  };
+  saveFaWindowConfig_(draft);
+  syncFaWindowUiImmediately_(draft);
+  renderOverviewKpiBoard();
+}
+
+function bindFaWindowInstantListeners_() {
+  const enabledEl = document.getElementById('faWindowEnabledInput');
+  const startEl = document.getElementById('faWindowStartInput');
+  const endEl = document.getElementById('faWindowEndInput');
+
+  [enabledEl, startEl, endEl].forEach(el => {
+    if (!el || el.dataset.faInstantBound === '1') return;
+    el.dataset.faInstantBound = '1';
+    el.addEventListener('change', applyFaWindowDraftChange_);
+    el.addEventListener('input', applyFaWindowDraftChange_);
+  });
+}
+
 function saveLeagueFaWindowSetting() {
   const enabled = Boolean(document.getElementById('faWindowEnabledInput')?.checked);
-  const startDate = document.getElementById('faWindowStartInput')?.value || '';
-  const endDate = document.getElementById('faWindowEndInput')?.value || '';
+  const startDate = String(document.getElementById('faWindowStartInput')?.value || '').trim();
+  const endDate = String(document.getElementById('faWindowEndInput')?.value || '').trim();
 
   if (enabled && startDate && endDate && startDate > endDate) {
     alert('開放起始日不可晚於截止日');
     return;
   }
 
-  saveFaWindowConfig_({
+  const nextCfg = {
     enabled,
     startDate,
     endDate,
     label: `${currentSeason} 年度 FA 申請期間`
-  });
-  refreshLeagueFaCenterContent_();
+  };
+  saveFaWindowConfig_(nextCfg);
+  refreshLeagueFaCenterContent_(nextCfg);
   renderOverviewKpiBoard();
   alert('✅ 已儲存年度 FA 申請開關與期間設定！');
 }
