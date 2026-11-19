@@ -1,6 +1,6 @@
 // ============================================================================
 // BBT 軟式棒球聯盟 - 全新站點 API 服務模組 (api.js)
-// 整合帳號登入、Session Token 夾帶、建帳與選帳登錄、個人資料與權限指派
+// 整合帳號登入、Session Token 夾帶、建帳與選帳登錄、個人資料、權限指派與 FA 審查
 // ============================================================================
 
 const API_BASE_URL = "https://script.google.com/macros/s/AKfycbyJjH3nGnvaP1rKqWtvmBzd0uNT0hn3S0Yursp081QedQLG_-Re3j3zrH9_zsfrM4S8Gw/exec";
@@ -141,8 +141,17 @@ const BBTApi = {
     return await callApi('savePlayerTransaction', { data: JSON.stringify(txData) });
   },
 
-  async approveTransaction(txId, status = 'approved') {
-    return await callApi('approvePlayerTransaction', { tx_id: txId, admin_status: status });
+  async approveTransaction(txId, status = 'approved', extra = {}) {
+    return await callApi('approvePlayerTransaction', {
+      tx_id: txId,
+      admin_status: status,
+      decision: status,
+      ...extra
+    });
+  },
+
+  async reviewFaTransaction(reviewPayload) {
+    return await callApi('reviewFaTransaction', { data: JSON.stringify(reviewPayload) });
   },
 
   // 🌟 跨表遠端讀取共用賽事表
