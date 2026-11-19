@@ -641,7 +641,16 @@ function renderOverviewKpiBoard() {
     : (isAllDiv ? allTeams : allTeams.filter(t => String(t.division || '').trim() === currentDivision));
 
   const scopedTeamIds = new Set(scopedTeams.map(t => String(t.team_id).trim()));
-  const scopedRoster = (globalData.roster || []).filter(r => scopedTeamIds.has(String(r.team_id).trim()));
+  const scopedRoster = (globalData.roster || []).filter(r => {
+    if (!scopedTeamIds.has(String(r.team_id).trim())) return false;
+    const statusStr = String(r.status || '').trim().toLowerCase();
+    if (statusStr !== 'approved') return false;
+    if (getApprovedFaForRosterRow_(r)) return false;
+    return true;
+  });
+  const uniqueActiveRosterIds = new Set(
+    scopedRoster.map(r => String(r.user_id || '').trim()).filter(Boolean)
+  );
   const scopedAtt = (globalData.attendance || []).filter(a => scopedTeamIds.has(String(a.team_id).trim()));
   const pendingTxCount = (globalData.transactions || []).filter(tx => String(tx.admin_status || '').trim() === 'pending').length;
   const historyTotal = (globalData.history || []).length + (globalData.transactions || []).length;
@@ -653,7 +662,7 @@ function renderOverviewKpiBoard() {
 
   document.getElementById('kpiTeamCount').innerText = scopedTeams.length;
   document.getElementById('kpiTotalTeamSub').innerText = `全聯盟共 ${allTeams.length} 隊`;
-  document.getElementById('kpiRosterCount').innerText = scopedRoster.length;
+  document.getElementById('kpiRosterCount').innerText = uniqueActiveRosterIds.size;
   document.getElementById('kpiAccountCountSub').innerText = `已建帳號 ${(globalData.users || []).length} 筆`;
   document.getElementById('kpiAttendanceCount').innerText = scopedAtt.length;
   document.getElementById('kpiTxHistoryCount').innerText = historyTotal;
