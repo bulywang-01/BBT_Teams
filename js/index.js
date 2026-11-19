@@ -410,17 +410,21 @@ async function enrollExistingUserToTeam() {
   }
 }
 
-function openEditRosterModal(userId) {
+function openEditRosterModal(userId, rosterId = '') {
   if (!currentSelectedTeamId) {
     alert('請先選擇球隊');
     return;
   }
-  const pObj = (globalData.roster || []).find(
+  const teamRoster = (globalData.roster || []).filter(
     r => String(r.team_id) === String(currentSelectedTeamId) && String(r.user_id) === String(userId)
   );
+  const pObj = rosterId
+    ? teamRoster.find(r => String(r.roster_id) === String(rosterId))
+    : teamRoster[0];
   if (!pObj) return;
 
   document.getElementById('editRosterUserId').value = pObj.user_id;
+  document.getElementById('editRosterId').value = pObj.roster_id || ''; // 記得在 Modal 放 <input type="hidden" id="editRosterId">
   document.getElementById('editRosterPlayerName').value = pObj.player_name || '';
   document.getElementById('editRosterNameDisplay').value = `${pObj.player_name || pObj.user_id} (${pObj.user_id})`;
   document.getElementById('editRosterNumber').value = pObj.number !== undefined && pObj.number !== null ? String(pObj.number) : '';
