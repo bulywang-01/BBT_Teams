@@ -1328,64 +1328,65 @@ function isApprovedTxStatus(statusVal) {
   return s === 'approved' || s === '已核准' || s === '核准' || s === '通過';
 }
 
+function isApprovedStatus_(statusVal) {
+  const s = String(statusVal || '').trim().toLowerCase();
+  return s === 'approved' || s === '已核准' || s === '核准' || s === '通過';
+}
+
+function isFaRecord_(tx) {
+  const typeStr = String(tx.tx_type || '').trim().toUpperCase();
+  const toTeam = String(tx.to_team_id || '').trim().toUpperCase();
+  return typeStr.includes('FA') || toTeam === 'FA_MARKET';
+}
+
+function isMyTeamTx_(tx, teamObj) {
+  if (!teamObj) return false;
+  const tid = String(teamObj.team_id || '').trim();
+  const tname = String(teamObj.team_name || '').trim();
+  const candidates = [
+    String(tx.from_team_id || '').trim(),
+    String(tx.to_team_id || '').trim(),
+    String(tx.team_id || '').trim(),
+    String(tx.from_team_name || '').trim(),
+    String(tx.to_team_name || '').trim()
+  ];
+  return candidates.some(v => v && (v === tid || (tname && v === tname)));
+}
+
+function formatTxPlayerName_(tx) {
+  const pObj = (globalData.roster || []).find(r => String(r.user_id) === String(tx.user_id));
+  const uObj = (globalData.users || []).find(u => String(u.user_id) === String(tx.user_id));
+  if (pObj) {
+    return pObj.number ? `#${pObj.number} ${pObj.player_name}` : pObj.player_name;
+  }
+  if (uObj && uObj.player_name) {
+    return uObj.player_name;
+  }
+  return tx.user_id || '—';
+}
+
 function renderTransactions() {
   const tbody = document.getElementById('transactionsTableBody');
   if (!tbody) return;
 
   const allTxs = globalData.transactions || [];
-  const teamIdStr = String(currentSelectedTeamId || '').trim();
+  const currentTeam = (globalData.teams || []).find(
+    t => String(t.team_id) === String(currentSelectedTeamId)
+  );
 
-  const isTeamRelated = (tx) => {
-    if (!teamIdStr) return false;
-    return (
-      String(tx.from_team_id || '').trim() === teamIdStr ||
-      String(tx.to_team_id || '').trim() === teamIdStr ||
-      String(tx.team_id || '').trim() === teamIdStr
-    );
-  };
+  // 1. 自己球隊的 FA（含審核中 / 已核准等狀態，優先排在最前）
+  const myTeamFaList = allTxs.filter(
+    tx => isFaRecord_(tx) && isMyTeamTx_(tx, currentTeam)
+  );
 
-  let filtered = allTxs.filter(tx => {
-    const mine = isTeamRelated(tx);
-    const approved = isApprovedTxStatus(tx.admin_status);
+  // 2. 他隊已審核通過的 FA（排除自己球隊，且必須已核准）
+  const otherApprovedFaList = allTxs.filter(
+    tx => isFaRecord_(tx) && !isMyTeamTx_(tx, currentTeam) && isApprovedStatus_(tx.admin_status)
+  );
 
-    if (currentTxScopeFilter === 'mine') {
-      return teamIdStr ? mine : true;
-    }
-    if (currentTxScopeFilter === 'others_approved') {
-      return !mine && approved;
-    }
-    // 預設 'all'：在有選隊時，顯示本隊全部紀錄 + 他隊已審核通過紀錄
-    if (teamIdStr) {
-      return mine || approved;
-    }
-    return true;
-  });
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">目前此篩選條件下尚無異動紀錄</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = filtered.map(tx => {
-    const mine = isTeamRelated(tx);
-    const pObj = (globalData.roster || []).find(r => String(r.user_id) === String(tx.user_id));
-    const uObj = (globalData.users || []).find(u => String(u.user_id) === String(tx.user_id));
-
-    let displayName = tx.user_id;
-    if (pObj) {
-      displayName = pObj.number ? `#${pObj.number} ${pObj.player_name}` : pObj.player_name;
-    } else if (uObj && uObj.player_name) {
-      displayName = uObj.player_name;
-    }
-
-    const scopeBadge = teamIdStr
-      ? (mine
-          ? '<span class="ml-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap">本隊</span>'
-          : '<span class="ml-1.5 bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap">他隊</span>')
-      : '';
-
+  const renderRow = (tx, tagText, tagClass) => {
     const statusText = tx.admin_status || 'pending';
-    const statusBadgeClass = isApprovedTxStatus(statusText)
+    const statusClass = isApprovedStatus_(statusText)
       ? 'bg-emerald-100 text-emerald-800'
       : 'bg-amber-100 text-amber-800';
 
@@ -1393,17 +1394,53 @@ function renderTransactions() {
       <tr class="hover:bg-slate-50 transition">
         <td class="p-3 text-slate-500 whitespace-nowrap">${tx.tx_date || '—'}</td>
         <td class="p-3 whitespace-nowrap">
-          <span class="bg-purple-100 text-purple-800 font-black px-2 py-0.5 rounded">${tx.tx_type}</span>
-          ${scopeBadge}
+          <span class="bg-purple-100 text-purple-800 font-black px-2 py-0.5 rounded">${tx.tx_type || 'FA'}</span>
+          <span class="ml-1.5 ${tagClass} text-[10px] font-bold px-1.5 py-0.5 rounded">${tagText}</span>
         </td>
-        <td class="p-3 font-black text-slate-900 whitespace-nowrap">${displayName}</td>
+        <td class="p-3 font-black text-slate-900 whitespace-nowrap">${formatTxPlayerName_(tx)}</td>
         <td class="p-3 text-slate-700">${tx.note || '—'}</td>
         <td class="p-3 text-right whitespace-nowrap">
-          <span class="${statusBadgeClass} font-bold px-2 py-0.5 rounded-full text-[11px]">${statusText}</span>
+          <span class="${statusClass} font-bold px-2 py-0.5 rounded-full text-[11px]">${statusText}</span>
         </td>
       </tr>
     `;
-  }).join('');
+  };
+
+  let html = '';
+
+  // 區塊一：本隊 FA
+  html += `
+    <tr class="bg-emerald-50/70">
+      <td colspan="5" class="px-3 py-2 text-[11px] font-black text-emerald-800 whitespace-nowrap">
+        本隊 FA 紀錄（${myTeamFaList.length}）
+      </td>
+    </tr>
+  `;
+  if (myTeamFaList.length > 0) {
+    html += myTeamFaList.map(tx =>
+      renderRow(tx, '本隊', 'bg-emerald-50 text-emerald-700 border border-emerald-200')
+    ).join('');
+  } else {
+    html += `<tr><td colspan="5" class="p-3 text-center text-xs text-slate-400">本隊目前尚無 FA 紀錄</td></tr>`;
+  }
+
+  // 區塊二：他隊已審核通過的 FA
+  html += `
+    <tr class="bg-slate-100/80">
+      <td colspan="5" class="px-3 py-2 text-[11px] font-black text-slate-700 whitespace-nowrap">
+        他隊已審核通過 FA（${otherApprovedFaList.length}）
+      </td>
+    </tr>
+  `;
+  if (otherApprovedFaList.length > 0) {
+    html += otherApprovedFaList.map(tx =>
+      renderRow(tx, '他隊 · 已核准', 'bg-slate-100 text-slate-600')
+    ).join('');
+  } else {
+    html += `<tr><td colspan="5" class="p-3 text-center text-xs text-slate-400">目前尚無他隊已審核通過的 FA 紀錄</td></tr>`;
+  }
+
+  tbody.innerHTML = html;
 }
 
 function openTeamProfileModal() {
