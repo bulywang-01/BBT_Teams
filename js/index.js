@@ -1729,7 +1729,12 @@ function renderTransactions() {
           <span class="bg-purple-100 text-purple-800 font-black px-2 py-0.5 rounded">${tx.tx_type || 'FA'}</span>
           <span class="ml-1.5 ${tagClass} text-[10px] font-bold px-1.5 py-0.5 rounded">${tagText}</span>
         </td>
-        <td class="p-3 font-black text-slate-900 whitespace-nowrap">${formatTxPlayerName_(tx)}</td>
+        <td class="p-3 whitespace-nowrap">
+          <button type="button" onclick="openPlayerCard('${String(tx.user_id || '').replace(/'/g, "\\'")}') " class="font-black text-bbt-navy hover:text-emerald-600 underline decoration-emerald-400 decoration-2 underline-offset-4 flex items-center gap-1 whitespace-nowrap">
+            <span>${formatTxPlayerName_(tx)}</span>
+            <i data-lucide="id-card" class="w-3.5 h-3.5 text-emerald-600 shrink-0"></i>
+          </button>
+        </td>
         <td class="p-3 text-slate-700">${tx.note || '—'}</td>
         <td class="p-3 text-right whitespace-nowrap">
           <span class="${statusClass} font-bold px-2 py-0.5 rounded-full text-[11px]">${statusText}</span>
