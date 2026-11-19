@@ -2361,47 +2361,26 @@ function syncFaApplyButtonsState_() {
   const applyButtons = Array.from(document.querySelectorAll('button')).filter(btn => {
     const onClickAttr = String(btn.getAttribute('onclick') || '');
     const txt = String(btn.textContent || '');
-    return onClickAttr.includes('openFaApplyModal') || txt.includes('宣告 FA 資格');
+    return onClickAttr.includes('openFaApplyModal') || txt.includes('宣告 FA');
   });
 
   applyButtons.forEach(btn => {
-    if (btn.closest('#faWorkflowGuideBanner')) {
-      if (!shouldAllow) {
-        btn.setAttribute('disabled', 'disabled');
-        btn.disabled = true;
-        btn.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
-        btn.title = disabledMsg;
-      } else {
-        btn.removeAttribute('disabled');
-        btn.disabled = false;
-        btn.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
-        btn.title = elig.quotaMode === 'BORROW_NEXT_YEAR'
-          ? elig.reason
-          : '宣告 FA 資格';
-      }
-      return;
+    if (btn.dataset.origLabel) {
+      btn.innerHTML = btn.dataset.origLabel;
     }
 
     if (!shouldAllow) {
       btn.setAttribute('disabled', 'disabled');
       btn.disabled = true;
       btn.classList.add('opacity-50', 'cursor-not-allowed');
-      btn.title = disabledMsg;
-      if (btn.textContent && btn.textContent.includes('宣告 FA')) {
-        if (!btn.dataset.origLabel) btn.dataset.origLabel = btn.innerHTML;
-        if (elig.hasInProgress) {
-          btn.innerHTML = 'FA 審核進行中（已停用）';
-        } else if (!elig.canApply) {
-          btn.innerHTML = '年度 FA 額度已用罄';
-        }
+      if (btn.closest('#faWorkflowGuideBanner')) {
+        btn.classList.add('pointer-events-none');
       }
+      btn.title = disabledMsg;
     } else {
       btn.removeAttribute('disabled');
       btn.disabled = false;
-      btn.classList.remove('opacity-50', 'cursor-not-allowed');
-      if (btn.dataset.origLabel) {
-        btn.innerHTML = btn.dataset.origLabel;
-      }
+      btn.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
       btn.title = elig.quotaMode === 'BORROW_NEXT_YEAR'
         ? elig.reason
         : '宣告 FA 資格';
@@ -2450,13 +2429,13 @@ function renderFaGuideBanner_(isSuperAdmin) {
       <div class="flex flex-wrap items-center gap-1">
         <span class="px-2 py-0.5 rounded bg-purple-100 text-purple-800 font-black whitespace-nowrap">已確定FA隊伍</span>
         <span>知會原球隊 → 自行接洽新球隊 →</span>
-        <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">宣告 FA 資格 (點我)</button>
+        <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">宣告 FA 資格</button>
         <span>→ 等待聯盟審核 → 申請成功</span>
       </div>
       <div class="flex flex-wrap items-center gap-1">
         <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-black whitespace-nowrap">聯盟配對方式</span>
         <span>知會原球隊 →</span>
-        <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">宣告 FA 資格 (點我)</button>
+        <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">宣告 FA 資格</button>
         <span>→ 等待聯盟通知 → 待球員選擇隊伍 → 申請成功</span>
       </div>
     </div>
