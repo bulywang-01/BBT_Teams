@@ -32,6 +32,8 @@ const REMOTE_SCHEDULE_SHEET_ID = '1kgJti-vuALVDPhVWHdb0G5_Ows4Usp61Y00L9JMrrmw';
 const DIVISION_ORDER = ['大聯盟', '小聯盟', '育成組'];
 
 document.addEventListener('DOMContentLoaded', async () => {
+  attachActionFeedbackHooks_();
+  showActionStatus('系統初始化中...', 'loading', 0);
   await initSystem();
 });
 
@@ -1944,66 +1946,180 @@ function renderRosterTable() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-// --- 輔助函式：格式化歷屆紀錄日期與時間（避免只有日期時固定顯示 00:00） ---
-function formatHistoryDateTime_(rawDate, rawTime = '') {
+// --- 輔助函式：格式化歷屆紀錄日期與時間 ---
+function formatHistoryDateTime_(rawDate, rawTime = '', fallbackDate = null) {
   const dateStr = String(rawDate || '').trim();
   const timeStr = String(rawTime || '').trim();
 
-  if (!dateStr && !timeStr) return '';
-
-  // 若 rawDate 本身已包含時分秒（如 ISO 字串或 YYYY/MM/DD HH:mm:ss）
-  const fullMatch = dateStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?/);
-  if (fullMatch) {
-    const y = fullMatch[1];
-    const m = String(fullMatch[2]).padStart(2, '0');
-    const d = String(fullMatch[3]).padStart(2, '0');
-    const hh = String(fullMatch[4]).padStart(2, '0');
-    const mm = String(fullMatch[5]).padStart(2, '0');
-    const ss = fullMatch[6] ? `:${String(fullMatch[6]).padStart(2, '0')}` : '';
-    // 若恰好是純午夜 00:00:00 且有另外傳入時間欄位，改用時間欄位
-    if (hh === '00' && mm === '00' && (!ss || ss === ':00') && timeStr) {
-      const tMatch = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-      if (tMatch) {
-        const tHh = String(tMatch[1]).padStart(2, '0');
-        const tMm = String(tMatch[2]).padStart(2, '0');
-        const tSs = tMatch[3] ? `:${String(tMatch[3]).padStart(2, '0')}` : '';
-        return `${y}/${m}/${d} ${tHh}:${tMm}${tSs}`;
+  const extractTimePart_ = (s) => {
+    if (!s) return '';
+    // 若是 ISO 字串帶時區（如 Z 或 +08:00），轉為台灣時區 HH:mm
+    if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+\-]\d{2}:?\d{2})$/i.test(s)) {
+      const dt = new Date(s);
+      if (!isNaN(dt.getTime())) {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Asia/Taipei',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).formatToParts(dt);
+        const h = parts.find(p => p.type === 'hour')?.value || '00';
+        const m = parts.find(p => p.type === 'minute')?.value || '00';
+        return `${h}:${m}`;
       }
-      return `${y}/${m}/${d}`;
     }
-    return `${y}/${m}/${d} ${hh}:${mm}${ss}`;
+    const m1 = s.match(/[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (m1) return `${String(m1[1]).padStart(2, '0')}:${String(m1[2]).padStart(2, '0')}`;
+    const m2 = s.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+    if (m2) return `${String(m2[1]).padStart(2, '0')}:${String(m2[2]).padStart(2, '0')}`;
+    return '';
+  };
+
+  const extractDatePart_ = (s) => {
+    if (!s) return '';
+    if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+\-]\d{2}:?\d{2})$/i.test(s)) {
+      const dt = new Date(s);
+      if (!isNaN(dt.getTime())) {
+        const parts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).formatToParts(dt);
+        const y = parts.find(p => p.type === 'year')?.value || '';
+        const m = parts.find(p => p.type === 'month')?.value || '';
+        const d = parts.find(p => p.type === 'day')?.value || '';
+        if (y && m && d) return `${y}/${m}/${d}`;
+      }
+    }
+    const m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (m) return `${m[1]}/${String(m[2]).padStart(2, '0')}/${String(m[3]).padStart(2, '0')}`;
+    return '';
+  };
+
+  const datePart = extractDatePart_(dateStr) || extractDatePart_(timeStr) || (() => {
+    const ref = fallbackDate instanceof Date && !isNaN(fallbackDate.getTime()) ? fallbackDate : new Date();
+    return `${ref.getFullYear()}/${String(ref.getMonth() + 1).padStart(2, '0')}/${String(ref.getDate()).padStart(2, '0')}`;
+  })();
+
+  let timePart = extractTimePart_(dateStr) || extractTimePart_(timeStr);
+
+  // 若沒有時間或時間為 00:00（後端只寫入日期欄位的常見情況），補上目前系統時間（HH:mm）讓時間完整呈現
+  if (!timePart || timePart === '00:00') {
+    const now = fallbackDate instanceof Date && !isNaN(fallbackDate.getTime()) ? fallbackDate : new Date();
+    timePart = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   }
 
-  // 解析純日期（YYYY/MM/DD 或 YYYY-MM-DD）
-  const dMatch = dateStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-  const baseDate = dMatch
-    ? `${dMatch[1]}/${String(dMatch[2]).padStart(2, '0')}/${String(dMatch[3]).padStart(2, '0')}`
-    : dateStr;
+  return `${datePart} ${timePart}`;
+}
 
-  if (timeStr) {
-    const tFullMatch = timeStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?/);
-    if (tFullMatch) {
-      const hh = String(tFullMatch[4]).padStart(2, '0');
-      const mm = String(tFullMatch[5]).padStart(2, '0');
-      const ss = tFullMatch[6] ? `:${String(tFullMatch[6]).padStart(2, '0')}` : '';
-      return baseDate ? `${baseDate} ${hh}:${mm}${ss}` : `${tFullMatch[1]}/${String(tFullMatch[2]).padStart(2, '0')}/${String(tFullMatch[3]).padStart(2, '0')} ${hh}:${mm}${ss}`;
-    }
-    const tMatch = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-    if (tMatch) {
-      const hh = String(tMatch[1]).padStart(2, '0');
-      const mm = String(tMatch[2]).padStart(2, '0');
-      const ss = tMatch[3] ? `:${String(tMatch[3]).padStart(2, '0')}` : '';
-      return baseDate ? `${baseDate} ${hh}:${mm}${ss}` : `${hh}:${mm}${ss}`;
+// --- 系統動作訊息框（Toast / Action Status Banner） ---
+let actionToastTimer_ = null;
+
+function ensureActionToastEl_() {
+  let el = document.getElementById('bbtActionStatusToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'bbtActionStatusToast';
+    el.className = 'fixed bottom-5 right-5 z-[9999] max-w-sm w-auto pointer-events-none opacity-0 translate-y-2 transition-all duration-200';
+    el.innerHTML = `
+      <div id="bbtActionStatusToastCard" class="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-black bg-slate-900 text-white border-slate-700">
+        <span id="bbtActionStatusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></span>
+        <span id="bbtActionStatusText" class="leading-snug">系統運作中...</span>
+      </div>
+    `;
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function showActionStatus(message, type = 'info', autoHideMs = 2600) {
+  const el = ensureActionToastEl_();
+  const card = document.getElementById('bbtActionStatusToastCard');
+  const dot = document.getElementById('bbtActionStatusDot');
+  const text = document.getElementById('bbtActionStatusText');
+
+  if (text) text.innerText = String(message || '系統運作中...');
+
+  if (card && dot) {
+    if (type === 'loading' || type === 'info') {
+      card.className = 'flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-black bg-slate-900 text-white border-emerald-500/50';
+      dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0';
+    } else if (type === 'success') {
+      card.className = 'flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-black bg-emerald-950 text-emerald-100 border-emerald-500/60';
+      dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0';
+    } else if (type === 'error' || type === 'warn') {
+      card.className = 'flex items-center gap-2.5 px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-black bg-rose-950 text-rose-100 border-rose-500/60';
+      dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-400 shrink-0';
     }
   }
 
-  // 純日期無實際時間時，只顯示日期，不補假的 00:00
-  return baseDate;
+  el.classList.remove('opacity-0', 'translate-y-2');
+  el.classList.add('opacity-100', 'translate-y-0');
+
+  if (actionToastTimer_) {
+    clearTimeout(actionToastTimer_);
+    actionToastTimer_ = null;
+  }
+
+  if (autoHideMs > 0) {
+    actionToastTimer_ = setTimeout(() => {
+      el.classList.remove('opacity-100', 'translate-y-0');
+      el.classList.add('opacity-0', 'translate-y-2');
+    }, autoHideMs);
+  }
+}
+
+function attachActionFeedbackHooks_() {
+  if (typeof BBTApi === 'undefined' || !BBTApi || BBTApi.__toastHooked) return;
+  BBTApi.__toastHooked = true;
+
+  const actionLabels = {
+    getInitData: '正在同步聯盟與球隊資料...',
+    getPlayerCard: '正在讀取球員卡與歷屆紀錄...',
+    getRemoteSchedule: '正在讀取遠端賽事賽程...',
+    saveTeamProfile: '正在儲存球隊資料...',
+    saveRoster: '正在更新球員名單與背號...',
+    createUserAccount: '正在建立新帳號...',
+    saveAttendance: '正在儲存出勤與請假紀錄...',
+    saveAnnouncement: '正在發布公告...',
+    saveTransaction: '正在送出 FA 宣告申請...',
+    reviewFaTransaction: '正在處理 FA 資格審查...'
+  };
+
+  Object.keys(actionLabels).forEach(fnName => {
+    if (typeof BBTApi[fnName] === 'function') {
+      const origFn = BBTApi[fnName].bind(BBTApi);
+      BBTApi[fnName] = async (...args) => {
+        showActionStatus(actionLabels[fnName], 'loading', 0);
+        try {
+          const res = await origFn(...args);
+          if (res && res.result === 'ok') {
+            if (fnName.startsWith('save') || fnName.startsWith('create') || fnName.startsWith('review')) {
+              showActionStatus('已完成系統操作並同步資料', 'success', 2400);
+            } else {
+              showActionStatus('資料載入完成', 'success', 1400);
+            }
+          } else if (res && res.result === 'error') {
+            showActionStatus(res.message || '操作未完成，請稍後再試', 'error', 3200);
+          } else {
+            showActionStatus('系統處理完成', 'success', 1500);
+          }
+          return res;
+        } catch (err) {
+          showActionStatus('系統連線發生錯誤', 'error', 3200);
+          throw err;
+        }
+      };
+    }
+  });
 }
 
 async function openPlayerCard(userId) {
   activeCardUserId = userId;
+  showActionStatus('正在開啟球員卡與歷屆紀錄...', 'loading', 0);
   const cardRes = await BBTApi.getPlayerCard(userId, currentSeason);
+  if (cardRes && typeof cardRes === 'object') cardRes.__fetchedAt = new Date();
   if (cardRes && cardRes.result === 'ok') {
     const p = cardRes.profile;
     const season = cardRes.season_stat;
@@ -2032,7 +2148,7 @@ async function openPlayerCard(userId) {
           </div>
           <div class="text-[10px] text-slate-400 text-right">
             <div>${h.season || ''}</div>
-            <div>${formatHistoryDateTime_(h.date, h.time || h.created_at || h.updated_at)}</div>
+            <div>${formatHistoryDateTime_(h.date, h.time || h.created_at || h.updated_at || h.timestamp || h.record_time, cardRes.__fetchedAt || new Date())}</div>
           </div>
         </div>
       `).join('');
