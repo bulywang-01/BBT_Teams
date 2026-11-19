@@ -12,8 +12,11 @@ let globalData = {
   transactions: [],
   attendance: [],
   users: [],
-  history: []
+  history: [],
+  seasons: [],
+  team_season_history: []
 };
+
 window.globalData = globalData;
 
 let currentSelectedTeamId = '';
@@ -49,6 +52,9 @@ async function initSystem() {
     globalData.attendance = res.attendance || [];
     globalData.users = res.users || [];
     globalData.history = res.history || [];
+    globalData.seasons = res.seasons || [];
+    globalData.team_season_history = res.team_season_history || [];
+    
     if (res.fa_window_config && typeof saveFaWindowConfig_ === 'function') {
       const mergedFaCfg = {
         ...(typeof getDefaultFaWindowConfig_ === 'function' ? getDefaultFaWindowConfig_() : {}),
