@@ -129,11 +129,13 @@ function getPreferredUserTeamId_() {
 function syncPersonalHeaderAndLayout_() {
   const isPersonalView = isPersonalOrTeamView_();
 
+  // 1. 個人登入時精簡上方 Header 組別切換列，避免誤切全聯盟組別
   const divGroup = document.getElementById('divisionSwitchGroup');
   if (divGroup) {
     divGroup.classList.toggle('hidden', isPersonalView);
   }
 
+  // 2. 個人登入時隱藏左側「聯盟球隊清單」側邊欄與「返回 KPI 總覽」按鈕
   const leftSidebar = document.getElementById('leftTeamSidebar');
   const mainGrid = leftSidebar ? leftSidebar.parentElement : null;
   if (leftSidebar) {
@@ -153,6 +155,7 @@ function syncPersonalHeaderAndLayout_() {
     }
   }
 
+  // 隱藏球隊主卡中的「返回 KPI 總覽」按鈕
   const selectedSection = document.getElementById('selectedTeamSection');
   if (selectedSection && isPersonalView) {
     const btns = Array.from(selectedSection.querySelectorAll('button'));
@@ -193,7 +196,7 @@ function syncDivisionButtonsUI() {
 // --- 共用隊徽元件（僅圖示 + 備用字） ---
 function buildTeamLogoHtml(team, sizeClass = 'w-12 h-12 text-base') {
   const teamNameStr = String(team.team_name || '').trim();
-  const fallbackChar = teamNameStr.length > 1 ? teamNameStr.substring(1, 2) : (teamNameStr.substring(0, 1) || 'B');
+  const fallbackChar = teamNameStr.substring(0, 1) || 'B';
   const logoPath = `logo/${team.team_id}.png`;
   return `
     <div class="${sizeClass} rounded-2xl overflow-hidden bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center shadow shrink-0">
@@ -318,7 +321,9 @@ function saveFaWindowConfig_(cfg) {
   faWindowConfigCache_ = normalized;
   try {
     localStorage.setItem(FA_WINDOW_STORAGE_KEY, JSON.stringify(normalized));
-  } catch (err) {}
+  } catch (err) {
+    // 忽略儲存空間限制錯誤，仍保留記憶體快取
+  }
 }
 
 function getEffectiveFaWindowConfig_() {
@@ -409,6 +414,7 @@ function ensureLeagueFaCenterModal_() {
       </div>
 
       <div class="p-4 overflow-y-auto space-y-4 text-xs">
+        <!-- 年度 FA 申請開關與期間設定 -->
         <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div class="font-black text-slate-900 flex items-center gap-1.5 whitespace-nowrap">
@@ -439,6 +445,7 @@ function ensureLeagueFaCenterModal_() {
           </div>
         </div>
 
+        <!-- 聯盟待審核與年度 FA 審查清單 -->
         <div class="space-y-2">
           <div class="flex items-center justify-between gap-2">
             <div class="font-black text-slate-900 whitespace-nowrap">FA 宣告案件審查清單</div>
@@ -1237,7 +1244,7 @@ function selectTeam(teamId) {
   document.getElementById('contactText').innerText = `${team.contact_name || '—'} (${team.contact_phone || ''})`;
 
   const teamNameStr = String(team.team_name || '').trim();
-  const fallbackChar = teamNameStr.length > 1 ? teamNameStr.substring(1, 2) : (teamNameStr.substring(0, 1) || 'B');
+  const fallbackChar = teamNameStr.substring(0, 1) || 'B';
   const logoPath = `logo/${team.team_id}.png`;
 
   const logoContainer = document.getElementById('teamLogoContainer');
@@ -1255,7 +1262,7 @@ function selectTeam(teamId) {
   syncPersonalHeaderAndLayout_();
   renderRosterTable();
   renderAnnouncements();
-  renderTransactions();
+  renderTransactions(); // <-- 換隊時立刻更新本隊與他隊已核准 FA
   loadRemoteScheduleOptions();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1816,6 +1823,7 @@ function resolveApprovedFaTargetTeamName_(tx) {
 
   const noteStr = String(tx.note || '').trim();
   if (noteStr) {
+    // 優先抓取【...】後的隊伍名稱，或比對現有球隊名稱
     const afterBracketMatch = noteStr.match(/】\s*([^\s（(]+)$/);
     if (afterBracketMatch && afterBracketMatch[1]) {
       const candidate = afterBracketMatch[1].trim();
@@ -1858,6 +1866,7 @@ function renderRosterTable() {
 
   const allTeamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
 
+  // FA 審核通過者視為該隊歷屆球員，不列入現役名單；若狀態本身已是 fa 且已核准亦排除
   const activeRoster = allTeamRoster.filter(r => {
     const rawStatus = String(r.status || '').trim().toLowerCase();
     const faInfo = getApprovedFaForRosterRow_(r);
@@ -2565,6 +2574,7 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     tx => isFaRecord_(tx) && String(tx.user_id || '').trim() === uid
   );
 
+  // 1. 只要有尚未完成（非成功也非拒絕）的 FA 申請，一律鎖定
   const inProgressTx = playerFaTxs.find(tx => !isCompletedFaStatus_(tx.admin_status));
   if (inProgressTx) {
     return {
@@ -2577,13 +2587,16 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
+  // 2. 檢查是否於去年（prevYear）已預支「今年（currentYear）」額度 -> 今年額度已用完，今年可提出 0 次（除非再預支明年額度，但每年總上限含預支為 1 次今年額度 + 1 次預支額度）
   const prevYearTxs = playerFaTxs.filter(tx => getTxYear_(tx) === prevYear);
   const borrowedCurrentYearFromPrevYear = prevYearTxs.some(tx => hasBorrowedNextYearQuota_(tx));
 
+  // 3. 統計今年（currentYear）已提出紀錄與是否已預支明年額度
   const thisYearTxs = playerFaTxs.filter(tx => getTxYear_(tx) === currentYear);
   const currentYearCount = thisYearTxs.length;
   const borrowedNextYearInThisYear = thisYearTxs.some(tx => hasBorrowedNextYearQuota_(tx));
 
+  // 情況 A：今年尚未提出 FA，且去年未預支今年額度 -> 可使用今年額度（1 次）
   if (currentYearCount === 0 && !borrowedCurrentYearFromPrevYear) {
     return {
       canApply: true,
@@ -2596,6 +2609,7 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
+  // 情況 B：今年尚未提出 FA，但去年已預支今年額度 -> 今年一般額度已用掉，但仍可預支明年（nextYear）額度於今年再提 1 次（提出後明年 nextYear 不能提 FA）
   if (currentYearCount === 0 && borrowedCurrentYearFromPrevYear) {
     return {
       canApply: true,
@@ -2608,6 +2622,7 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
+  // 情況 C：今年已提出 1 次且尚未預支明年額度 -> 可使用今年/明年額度於今年再提第 2 次（若本次預支明年額度，明年 nextYear 不能提 FA）
   if (currentYearCount === 1 && !borrowedNextYearInThisYear) {
     return {
       canApply: true,
@@ -2620,6 +2635,7 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
+  // 情況 D：今年已提出 >= 2 次，或今年已預支明年額度 -> 今年額度已用罄，且明年額度已被使用
   const reasonText = borrowedNextYearInThisYear
     ? `${currentYear} 年度額度及 ${nextYear} 年度預支額度皆已使用（${nextYear} 年不能再提 FA）`
     : `${currentYear} 年度 FA 額度已達上限`;
@@ -2753,16 +2769,19 @@ function renderTransactions() {
 
   renderFaGuideBanner_(isSuper);
 
+  // 非聯盟總管理員時，僅球員本人可提出 FA（球隊端僅顯示提出名單與狀態，不提供球隊自行審核）
   const btnFaApply = document.querySelector('button[onclick="openFaApplyModal()"]');
   if (btnFaApply) {
     const isPlayerSelf = Boolean(currentUser && currentUser.role === 'player');
     btnFaApply.classList.toggle('hidden', !isSuper && !isPlayerSelf);
   }
 
+  // 1. 本隊提出／相關 FA 名單（球隊頁面僅顯示有誰提出與審核狀態，非聯盟管理員不顯示核准/駁回操作）
   const myTeamFaList = allTxs.filter(
     tx => isFaRecord_(tx) && isMyTeamTx_(tx, currentTeam)
   );
 
+  // 2. 他隊已審核通過 FA
   const otherApprovedFaList = allTxs.filter(
     tx => isFaRecord_(tx) && !isMyTeamTx_(tx, currentTeam) && isApprovedStatus_(tx.admin_status)
   );
@@ -2775,6 +2794,7 @@ function renderTransactions() {
       ? 'bg-emerald-100 text-emerald-800'
       : (pending ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800');
 
+    // 僅聯盟總管理員（super_admin）可進行 FA 審核
     const reviewActionsHtml = (allowLeagueReview && pending && tx.tx_id)
       ? `
         <div class="mt-1.5 flex items-center justify-end gap-1">
