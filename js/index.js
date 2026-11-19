@@ -661,6 +661,9 @@ function renderOverviewKpiBoard() {
     : (isAllDiv ? allTeams : allTeams.filter(t => String(t.division || '').trim() === currentDivision));
 
   const scopedTeamIds = new Set(scopedTeams.map(t => String(t.team_id).trim()));
+  const scopedTeamNames = new Set(
+    scopedTeams.map(t => String(t.team_name || '').trim()).filter(Boolean)
+  );
   const scopedRoster = (globalData.roster || []).filter(r => {
     if (!scopedTeamIds.has(String(r.team_id).trim())) return false;
     const statusStr = String(r.status || '').trim().toLowerCase();
@@ -672,8 +675,44 @@ function renderOverviewKpiBoard() {
     scopedRoster.map(r => String(r.user_id || '').trim()).filter(Boolean)
   );
   const scopedAtt = (globalData.attendance || []).filter(a => scopedTeamIds.has(String(a.team_id).trim()));
-  const pendingTxCount = (globalData.transactions || []).filter(tx => String(tx.admin_status || '').trim() === 'pending').length;
-  const historyTotal = (globalData.history || []).length + (globalData.transactions || []).length;
+
+  const isTxInScope_ = (tx) => {
+    if (!isSuper || isAllDiv) return true;
+    const refs = [
+      String(tx.from_team_id || '').trim(),
+      String(tx.to_team_id || '').trim(),
+      String(tx.team_id || '').trim(),
+      String(tx.from_team_name || '').trim(),
+      String(tx.to_team_name || '').trim()
+    ].filter(Boolean);
+    if (refs.some(v => scopedTeamIds.has(v) || scopedTeamNames.has(v))) {
+      return true;
+    }
+    const uid = String(tx.user_id || '').trim();
+    if (!uid) return false;
+    return (globalData.roster || []).some(r =>
+      String(r.user_id || '').trim() === uid && scopedTeamIds.has(String(r.team_id).trim())
+    );
+  };
+
+  const isHistoryInScope_ = (h) => {
+    if (!isSuper || isAllDiv) return true;
+    const tid = String(h.team_id || '').trim();
+    const tname = String(h.team_name || '').trim();
+    if ((tid && scopedTeamIds.has(tid)) || (tname && scopedTeamNames.has(tname))) {
+      return true;
+    }
+    const uid = String(h.user_id || '').trim();
+    if (!uid) return false;
+    return (globalData.roster || []).some(r =>
+      String(r.user_id || '').trim() === uid && scopedTeamIds.has(String(r.team_id).trim())
+    );
+  };
+
+  const scopedTxs = (globalData.transactions || []).filter(isTxInScope_);
+  const scopedHistory = (globalData.history || []).filter(isHistoryInScope_);
+  const pendingTxCount = scopedTxs.filter(tx => String(tx.admin_status || '').trim() === 'pending').length;
+  const historyTotal = scopedHistory.length + scopedTxs.length;
 
   document.getElementById('kpiSeasonBadge').innerText = currentSeason;
   document.getElementById('kpiSectionTitle').innerText = !isSuper
@@ -688,18 +727,14 @@ function renderOverviewKpiBoard() {
   document.getElementById('kpiTxHistoryCount').innerText = historyTotal;
   document.getElementById('kpiPendingTxSub').innerText = `待審核 ${pendingTxCount} 筆`;
 
-  const allFaTxs = globalData.transactions || [];
   const seasonPrefix = String(currentSeason || '').split('-')[0] || String(new Date().getFullYear());
-  const annualFaCount = allFaTxs.filter(tx => {
+  const scopedFaTxs = scopedTxs.filter(tx => {
     if (!isFaRecord_(tx)) return false;
     const dStr = String(tx.tx_date || '');
     return !dStr || dStr.startsWith(seasonPrefix);
-  }).length;
-  const annualApprovedFaCount = allFaTxs.filter(tx => {
-    if (!isFaRecord_(tx) || !isApprovedStatus_(tx.admin_status)) return false;
-    const dStr = String(tx.tx_date || '');
-    return !dStr || dStr.startsWith(seasonPrefix);
-  }).length;
+  });
+  const annualFaCount = scopedFaTxs.length;
+  const annualApprovedFaCount = scopedFaTxs.filter(tx => isApprovedStatus_(tx.admin_status)).length;
 
   const kpiCardsGrid = document.getElementById('kpiTeamCount')?.closest('.grid');
   if (kpiCardsGrid) {
