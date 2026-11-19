@@ -3,7 +3,7 @@
 // 整合帳號登入、Session Token 夾帶、個人資料維護與權限指派
 // ============================================================================
 
-const API_BASE_URL = "https://script.google.com/macros/s/AKfycbwWfw227C_lgYuOI_schPc-gnvCrchy0ckn6zjTAhmLPSD6ZhOL13eIpQL1S1rbh0JZlg/exec";
+const API_BASE_URL = "https://script.google.com/macros/s/AKfycbznsSicatWVvF2kBJAnjIQ-5WlVs-NCKHGG-EWTAg5NC8D7mb1Laj9aHthoN6qKHsFBLg/exec";
 const AUTH_SESSION_STORAGE_KEY = 'bbt_auth_session';
 
 function getStoredAuthToken_() {
