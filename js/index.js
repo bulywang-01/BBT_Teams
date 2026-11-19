@@ -3213,10 +3213,7 @@ function onSeasonChange(season) { currentSeason = season; initSystem(); }
 // 球季清單管理、球隊加入球季設定與歷屆球季戰績模組
 // ============================================================================
 
-const DEFAULT_SEASONS_FALLBACK = [
-  { season_id: '2026-S18', season_name: '2026 第 18 季', year: 2026, is_current: true, status: 'active' },
-  { season_id: '2026-S17', season_name: '2026 第 17 季', year: 2026, is_current: false, status: 'archived' }
-];
+const DEFAULT_SEASONS_FALLBACK = [];
 
 function getNormalizedSeasonsList_() {
   const raw = Array.isArray(globalData.seasons) && globalData.seasons.length > 0
