@@ -59,16 +59,44 @@ const BBTAuth = {
       }
     }
     window.currentUser = null;
+    window.currentSelectedTeamId = '';
     localStorage.removeItem(this.AUTH_STORAGE_KEY);
     if (typeof BBTApi !== 'undefined' && typeof BBTApi.clearSession === 'function') {
       BBTApi.clearSession();
     }
   },
 
+  _resolveDisplayName(uid, backendUser = {}, usersList = [], rosterList = []) {
+    const targetId = String(uid || '').trim().toLowerCase();
+    const targetAcc = String(backendUser.account || '').trim().toLowerCase();
+
+    const matchedUserRow = usersList.find(u =>
+      (targetId && String(u.user_id || '').trim().toLowerCase() === targetId) ||
+      (targetAcc && String(u.account || '').trim().toLowerCase() === targetAcc)
+    ) || {};
+
+    const matchedPlayer = rosterList.find(r =>
+      (targetId && String(r.user_id || '').trim().toLowerCase() === targetId) ||
+      (targetAcc && String(r.account || '').trim().toLowerCase() === targetAcc)
+    ) || {};
+
+    return String(
+      matchedUserRow.player_name
+      || matchedUserRow.name
+      || backendUser.player_name
+      || backendUser.name
+      || backendUser.full_name
+      || backendUser.user_name
+      || matchedPlayer.player_name
+      || matchedPlayer.name
+      || backendUser.account
+      || uid
+    ).trim();
+  },
+
   normalizeBackendUser(backendUser, rosterList = [], teamsList = [], usersList = []) {
     const uid = String(backendUser.user_id || '').trim();
     const matchedPlayer = rosterList.find(r => String(r.user_id).trim() === uid) || {};
-    const matchedUserRow = usersList.find(u => String(u.user_id).trim() === uid) || {};
 
     let role = 'player';
     if (String(backendUser.global_role || '').trim() === 'super_admin') {
@@ -83,27 +111,26 @@ const BBTAuth = {
       }
     }
 
+    const managedIds = Array.isArray(backendUser.managed_team_ids) ? backendUser.managed_team_ids.map(String) : [];
+    const memberIds = Array.isArray(backendUser.member_team_ids) ? backendUser.member_team_ids.map(String) : [];
+    const currentSel = String(window.currentSelectedTeamId || '').trim();
+
     let primaryTeamId = '';
     if (role === 'team_admin') {
-      primaryTeamId = (backendUser.managed_team_ids && backendUser.managed_team_ids[0])
-        || (backendUser.member_team_ids && backendUser.member_team_ids[0])
+      primaryTeamId = (currentSel && managedIds.includes(currentSel) ? currentSel : '')
+        || managedIds[0]
+        || memberIds[0]
         || matchedPlayer.team_id
         || '';
     } else if (role === 'player') {
-      primaryTeamId = (backendUser.member_team_ids && backendUser.member_team_ids[0])
+      primaryTeamId = (currentSel && memberIds.includes(currentSel) ? currentSel : '')
+        || memberIds[0]
         || matchedPlayer.team_id
         || '';
     }
 
     const teamObj = teamsList.find(t => String(t.team_id) === String(primaryTeamId));
-    const displayName = String(
-      matchedUserRow.player_name
-      || backendUser.player_name
-      || matchedPlayer.player_name
-      || backendUser.name
-      || backendUser.account
-      || uid
-    ).trim();
+    const displayName = this._resolveDisplayName(uid, backendUser, usersList, rosterList);
 
     const roleTitleMap = {
       'super_admin': '聯盟最高總管理員',
@@ -120,8 +147,8 @@ const BBTAuth = {
       global_role: backendUser.global_role || 'user',
       team_id: primaryTeamId,
       team_roles_map: backendUser.team_roles_map || {},
-      managed_team_ids: backendUser.managed_team_ids || [],
-      member_team_ids: backendUser.member_team_ids || [],
+      managed_team_ids: managedIds,
+      member_team_ids: memberIds,
       title: roleTitleMap[role] || '聯盟成員'
     };
   },
@@ -200,7 +227,7 @@ const BBTAuth = {
         String(r.player_name).trim() === account
       );
 
-      if (!matchedUser && !matchedPlayer && account.toLowerCase() !== 'admin' && account.toLowerCase() !== 'bbsadmin' && account.toLowerCase() !== 'bbtadmin') {
+      if (!matchedUser && !matchedPlayer && !['admin', 'bbsadmin', 'bbtadmin'].includes(account.toLowerCase())) {
         throw new Error('找不到此帳號或球員代號，請確認輸入是否正確。');
       }
 
@@ -221,11 +248,12 @@ const BBTAuth = {
         }
       }
 
-      const displayName = String(
-        (matchedUser && matchedUser.player_name)
-        || (matchedPlayer && matchedPlayer.player_name)
-        || account
-      ).trim();
+      const displayName = this._resolveDisplayName(
+        uid,
+        { ...(matchedUser || {}), ...(matchedPlayer || {}), account },
+        usersList,
+        rosterList
+      );
 
       const roleTitleMap = {
         'super_admin': '聯盟最高總管理員',
@@ -261,41 +289,45 @@ const BBTAuth = {
     const user = this.getCurrentUser();
     if (!user) return;
 
-    const role = user.role;
     const usersList = (window.globalData && window.globalData.users) || [];
     const rosterList = (window.globalData && window.globalData.roster) || [];
     const teamsList = (window.globalData && window.globalData.teams) || [];
 
+    const roleOverrides = JSON.parse(localStorage.getItem(this.ROLE_OVERRIDE_KEY) || '{}');
+    const overrideRole = roleOverrides[String(user.user_id || '').trim()];
+    const role = overrideRole || user.role || 'player';
+    user.role = role;
+
     const latestUserRow = usersList.find(u => String(u.user_id).trim() === String(user.user_id).trim()) || {};
     const latestRosterRow = rosterList.find(r => String(r.user_id).trim() === String(user.user_id).trim()) || {};
-    const resolvedName = String(
-      latestUserRow.player_name
-      || user.player_name
-      || latestRosterRow.player_name
-      || user.name
-      || user.account
-      || user.user_id
-    ).trim();
+    const resolvedName = this._resolveDisplayName(user.user_id, { ...latestUserRow, ...latestRosterRow, ...user }, usersList, rosterList);
 
     user.name = resolvedName;
     user.player_name = resolvedName;
     window.currentUser = user;
 
-    document.getElementById('userNameDisplay').innerText = resolvedName;
-    document.getElementById('userTitleDisplay').innerText = user.title || '聯盟成員';
+    const nameEl = document.getElementById('userNameDisplay');
+    const titleEl = document.getElementById('userTitleDisplay');
+    if (nameEl) nameEl.innerText = resolvedName;
+    if (titleEl) titleEl.innerText = user.title || '聯盟成員';
 
     const btnAuth = document.getElementById('btnAuthAction');
-    btnAuth.className = "bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-xl transition border border-slate-700 flex items-center space-x-1";
-    document.getElementById('btnAuthText').innerText = "登出";
+    const btnAuthText = document.getElementById('btnAuthText');
+    if (btnAuth) {
+      btnAuth.className = "bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-xl transition border border-slate-700 flex items-center space-x-1";
+    }
+    if (btnAuthText) btnAuthText.innerText = "登出";
 
-    const hasProfile = Boolean(latestRosterRow.user_id || latestUserRow.user_id);
+    const hasProfile = Boolean(latestRosterRow.user_id || latestUserRow.user_id || user.user_id);
     const btnSelf = document.getElementById('btnOpenSelfProfile');
-    if (hasProfile) {
-      btnSelf.classList.remove('hidden');
-      btnSelf.classList.add('flex');
-    } else {
-      btnSelf.classList.add('hidden');
-      btnSelf.classList.remove('flex');
+    if (btnSelf) {
+      if (hasProfile) {
+        btnSelf.classList.remove('hidden');
+        btnSelf.classList.add('flex');
+      } else {
+        btnSelf.classList.add('hidden');
+        btnSelf.classList.remove('flex');
+      }
     }
 
     const btnRoleMgr = document.getElementById('btnOpenAdminRoleMgr');
@@ -303,37 +335,37 @@ const BBTAuth = {
     const btnCreateTeamSidebar = document.getElementById('btnSidebarCreateTeam');
 
     if (role === 'super_admin') {
-      btnRoleMgr.classList.remove('hidden');
-      btnRoleMgr.classList.add('flex');
-      if (btnCreateAcc) {
-        btnCreateAcc.classList.remove('hidden');
-        btnCreateAcc.classList.add('flex');
-      }
+      if (btnRoleMgr) { btnRoleMgr.classList.remove('hidden'); btnRoleMgr.classList.add('flex'); }
+      if (btnCreateAcc) { btnCreateAcc.classList.remove('hidden'); btnCreateAcc.classList.add('flex'); }
       if (btnCreateTeamSidebar) btnCreateTeamSidebar.classList.remove('hidden');
     } else {
-      btnRoleMgr.classList.add('hidden');
-      btnRoleMgr.classList.remove('flex');
+      if (btnRoleMgr) { btnRoleMgr.classList.add('hidden'); btnRoleMgr.classList.remove('flex'); }
       if (btnCreateTeamSidebar) btnCreateTeamSidebar.classList.add('hidden');
-      if (btnCreateAcc && role === 'team_admin') {
-        btnCreateAcc.classList.remove('hidden');
-        btnCreateAcc.classList.add('flex');
-      } else if (btnCreateAcc) {
-        btnCreateAcc.classList.add('hidden');
-        btnCreateAcc.classList.remove('flex');
+      if (btnCreateAcc) {
+        if (role === 'team_admin') {
+          btnCreateAcc.classList.remove('hidden');
+          btnCreateAcc.classList.add('flex');
+        } else {
+          btnCreateAcc.classList.add('hidden');
+          btnCreateAcc.classList.remove('flex');
+        }
       }
     }
 
     const leftSidebar = document.getElementById('leftTeamSidebar');
     const rightWorkspace = document.getElementById('rightMainWorkspace');
     const divisionGroup = document.getElementById('divisionFilterGroup');
+    const roleBadge = document.getElementById('roleBadge');
 
     if (role === 'super_admin') {
-      document.getElementById('roleBadge').innerText = "SUPER ADMIN";
-      document.getElementById('roleBadge').className = "bg-emerald-500/20 text-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-500/30 uppercase tracking-widest";
+      if (roleBadge) {
+        roleBadge.innerText = "SUPER ADMIN";
+        roleBadge.className = "bg-emerald-500/20 text-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-500/30 uppercase tracking-widest";
+      }
 
-      leftSidebar.classList.remove('hidden');
-      rightWorkspace.className = "lg:col-span-8 space-y-5";
-      divisionGroup.classList.remove('hidden');
+      if (leftSidebar) leftSidebar.classList.remove('hidden');
+      if (rightWorkspace) rightWorkspace.className = "lg:col-span-8 space-y-5";
+      if (divisionGroup) divisionGroup.classList.remove('hidden');
 
       this.toggleManagementControls(true);
 
@@ -349,9 +381,9 @@ const BBTAuth = {
         renderOverviewKpiBoard();
       }
     } else {
-      leftSidebar.classList.add('hidden');
-      rightWorkspace.className = "lg:col-span-12 space-y-5";
-      divisionGroup.classList.add('hidden');
+      if (leftSidebar) leftSidebar.classList.add('hidden');
+      if (rightWorkspace) rightWorkspace.className = "lg:col-span-12 space-y-5";
+      if (divisionGroup) divisionGroup.classList.add('hidden');
 
       const myTeam = teamsList.find(t => String(t.team_id) === String(user.team_id));
       if (myTeam) {
@@ -361,15 +393,16 @@ const BBTAuth = {
         renderOverviewKpiBoard();
       }
 
-      if (role === 'team_admin') {
-        document.getElementById('roleBadge').innerText = "TEAM ADMIN";
-        document.getElementById('roleBadge').className = "bg-amber-500/20 text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-500/30 uppercase tracking-widest";
-        this.toggleManagementControls(true);
-      } else {
-        document.getElementById('roleBadge').innerText = "PLAYER";
-        document.getElementById('roleBadge').className = "bg-sky-500/20 text-sky-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-sky-500/30 uppercase tracking-widest";
-        this.toggleManagementControls(false);
+      if (roleBadge) {
+        if (role === 'team_admin') {
+          roleBadge.innerText = "TEAM ADMIN";
+          roleBadge.className = "bg-amber-500/20 text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-500/30 uppercase tracking-widest";
+        } else {
+          roleBadge.innerText = "PLAYER";
+          roleBadge.className = "bg-sky-500/20 text-sky-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-sky-500/30 uppercase tracking-widest";
+        }
       }
+      this.toggleManagementControls(role === 'team_admin');
     }
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -384,19 +417,19 @@ const BBTAuth = {
     const attHeader = document.getElementById('attendanceHeaderTitle');
 
     if (canManageTeam) {
-      btnTeamEdit.classList.remove('hidden');
-      btnBatchAtt.classList.remove('hidden');
-      btnNewAnn.classList.remove('hidden');
+      if (btnTeamEdit) btnTeamEdit.classList.remove('hidden');
+      if (btnBatchAtt) btnBatchAtt.classList.remove('hidden');
+      if (btnNewAnn) btnNewAnn.classList.remove('hidden');
       if (btnEnrollExisting) btnEnrollExisting.classList.remove('hidden');
-      singleAttText.innerText = '+ 單筆回報';
-      attHeader.innerText = '球員出席回報與請假管理控制台';
+      if (singleAttText) singleAttText.innerText = '+ 單筆回報';
+      if (attHeader) attHeader.innerText = '球員出席回報與請假管理控制台';
     } else {
-      btnTeamEdit.classList.add('hidden');
-      btnBatchAtt.classList.add('hidden');
-      btnNewAnn.classList.add('hidden');
+      if (btnTeamEdit) btnTeamEdit.classList.add('hidden');
+      if (btnBatchAtt) btnBatchAtt.classList.add('hidden');
+      if (btnNewAnn) btnNewAnn.classList.add('hidden');
       if (btnEnrollExisting) btnEnrollExisting.classList.add('hidden');
-      singleAttText.innerText = '+ 我要出席回報 / 請假';
-      attHeader.innerText = '我的賽前出勤回報與球隊出賽狀態';
+      if (singleAttText) singleAttText.innerText = '+ 我要出席回報 / 請假';
+      if (attHeader) attHeader.innerText = '我的賽前出勤回報與球隊出賽狀態';
     }
   },
 
@@ -527,7 +560,15 @@ const BBTAuth = {
       }
     }
 
-    alert('✅ 已成功指派該帳號權限！下次該帳號登入時將套用新權限。');
+    const curUser = this.getCurrentUser();
+    if (curUser && String(curUser.user_id) === String(userId)) {
+      curUser.role = newRole;
+      if (newRole === 'team_admin' && teamId) curUser.team_id = teamId;
+      this.setSession(curUser, curUser.token || '');
+      this.applyRolePermissions();
+    }
+
+    alert('✅ 已成功指派該帳號權限！');
     if (typeof initSystem === 'function') await initSystem();
     this.populateRoleMgrPlayerSelect();
   }
