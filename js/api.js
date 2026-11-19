@@ -105,6 +105,14 @@ const BBTApi = {
     return await callApi('getTeamSystemInitData', { season, team_id: teamId });
   },
 
+  async saveSeason(seasonData) {
+    return await callApi('saveSeason', { data: JSON.stringify(seasonData) });
+  },
+
+  async saveTeamSeasonAssignment(assignData) {
+    return await callApi('saveTeamSeasonAssignment', { data: JSON.stringify(assignData) });
+  },
+
   async saveTeamProfile(teamData) {
     return await callApi('saveTeamProfile', { data: JSON.stringify(teamData) });
   },
