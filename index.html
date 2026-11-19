@@ -2195,17 +2195,16 @@
       if (currentUser && currentUser.role !== 'super_admin') return;
       currentDivision = divName;
       window.currentDivision = divName;
-      ['maj', 'min', 'rok'].forEach(k => { document.getElementById('btn-' + k).className = "px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition"; });
+      ['maj', 'min', 'rok'].forEach(k => {
+        document.getElementById('btn-' + k).className = "px-3.5 py-1 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200 transition";
+      });
       const activeMap = { '大聯盟': 'maj', '小聯盟': 'min', '育成組': 'rok' };
       document.getElementById('btn-' + activeMap[divName]).className = "px-3.5 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition";
-      renderTeamSidebar();
-      renderOverviewKpiBoard();
-      const filtered = globalData.teams.filter(t => String(t.division).trim() === currentDivision);
-      if (filtered.length > 0) {
-        selectTeam(filtered[0].team_id);
-      } else {
-        showKpiOverview();
-      }
+
+      currentSelectedTeamId = '';
+      window.currentSelectedTeamId = '';
+      renderTeamSidebar(document.getElementById('teamSearchInput')?.value || '');
+      showKpiOverview();
     }
 
     function switchTab(tabId) {
