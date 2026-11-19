@@ -61,10 +61,16 @@
           <button onclick="switchDiv('育成組')" id="btn-rok" class="px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700/80 transition whitespace-nowrap shrink-0">育成組</button>
         </div>
 
-        <select id="seasonSelect" onchange="onSeasonChange(this.value)" class="bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-1.5 font-bold">
-          <option value="2026-S18">2026 第 18 季 (現行賽季)</option>
-          <option value="2026-S17">2026 第 17 季</option>
-        </select>
+        <div class="flex items-center gap-1.5">
+          <select id="seasonSelect" onchange="onSeasonChange(this.value)" class="bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-1.5 font-bold">
+            <option value="2026-S18">2026 第 18 季 (現行賽季)</option>
+            <option value="2026-S17">2026 第 17 季</option>
+          </select>
+          <button id="btnOpenSeasonManager" onclick="openSeasonManagerModal()" class="hidden bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/40 text-xs font-bold px-2.5 py-1.5 rounded-xl transition items-center gap-1 whitespace-nowrap">
+            <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
+            <span>球季管理</span>
+          </button>
+        </div>
 
         <div class="text-right px-2">
           <div id="userNameDisplay" class="font-black text-white">未登入</div>
@@ -171,6 +177,7 @@
                 <div class="flex flex-wrap items-center gap-2">
                   <h2 id="teamTitle" class="text-xl font-black text-slate-900">球隊名稱</h2>
                   <span id="teamDivisionBadge" class="bg-amber-100 text-amber-800 text-[11px] font-black px-2.5 py-0.5 rounded-full">大聯盟組</span>
+                  <span id="teamJoinedSeasonBadge" class="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">加入球季：—</span>
                   <span id="teamIdBadge" class="bg-slate-100 text-slate-600 text-[11px] font-bold px-2.5 py-0.5 rounded-full">TEAM-ID</span>
                 </div>
                 <p id="teamIntroText" class="text-xs text-slate-500 mt-1">尚未填寫球隊介紹。</p>
@@ -179,6 +186,7 @@
 
             <div class="flex flex-wrap items-center gap-2">
               <button onclick="showKpiOverview()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl transition">返回 KPI 總覽</button>
+              <button id="btnTeamSeasonAssign" onclick="openTeamSeasonModal()" class="hidden bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl transition whitespace-nowrap">球季組別與歷史設定</button>
               <button id="btnTeamProfileEdit" onclick="openTeamProfileModal()" class="bg-bbt-navy hover:bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-xl transition">隊服與介紹維護</button>
             </div>
           </div>
@@ -213,6 +221,10 @@
             <button onclick="switchTab('transactions')" id="tab-transactions" class="tab-btn px-5 py-3.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-1.5 whitespace-nowrap">
               <i data-lucide="repeat" class="w-4 h-4"></i>
               <span>球員異動 &amp; FA 專區</span>
+            </button>
+            <button onclick="switchTab('seasonHistory')" id="tab-seasonHistory" class="tab-btn px-5 py-3.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-1.5 whitespace-nowrap">
+              <i data-lucide="history" class="w-4 h-4"></i>
+              <span>歷屆球季與戰績</span>
             </button>
           </div>
 
@@ -340,6 +352,36 @@
               </table>
             </div>
           </div>
+
+          <!-- TAB 5: 歷屆球季與戰績 -->
+          <div id="panel-seasonHistory" class="tab-panel hidden p-5 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 class="font-black text-sm text-slate-900">球隊歷屆參賽球季、組別升降與歷史名單紀錄</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">完整記錄本隊加入球季起各季所屬組別（大聯盟／小聯盟／育成組）與戰績名次</p>
+              </div>
+              <button id="btnAddTeamSeasonHistoryRow" onclick="openTeamSeasonModal()" class="hidden bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-3.5 py-2 rounded-xl transition whitespace-nowrap">
+                + 設定球季組別 / 歷史紀錄
+              </button>
+            </div>
+
+            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead class="bg-slate-50 text-slate-500 border-b border-slate-200">
+                  <tr>
+                    <th class="p-3">球季</th>
+                    <th class="p-3">當時隊名</th>
+                    <th class="p-3">參賽組別</th>
+                    <th class="p-3">勝-敗-和</th>
+                    <th class="p-3">名次 / 備註</th>
+                    <th class="p-3 text-center">登錄人數</th>
+                    <th class="p-3 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="teamSeasonHistoryTableBody" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -362,7 +404,7 @@
         </div>
         <div>
           <label class="font-bold text-slate-700 block mb-1">密碼</label>
-          <input id="loginPasswordInput" type="password" required placeholder="請輸入密碼" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          <input id="loginPasswordInput" type="password" required placeholder="預設密碼 1234" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
         </div>
         <div id="loginErrorMsg" class="hidden bg-rose-50 text-rose-700 border border-rose-200 rounded-xl p-2.5 font-bold"></div>
         <div class="flex justify-end space-x-2 pt-2">
@@ -404,10 +446,10 @@
             </select>
           </div>
           <div>
-            <label class="font-bold text-slate-700 block mb-1">建立賽季</label>
+            <label class="font-bold text-slate-700 block mb-1">加入球季 (Joined Season)</label>
             <select id="newTeamSeason" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
-              <option value="2026-S18">2026-S18</option>
-              <option value="2026-S17">2026-S17</option>
+              <option value="2026-S18">2026 第 18 季 (2026-S18)</option>
+              <option value="2026-S17">2026 第 17 季 (2026-S17)</option>
             </select>
           </div>
         </div>
@@ -1007,5 +1049,127 @@
     </div>
   </div>
 
+
+  <!-- ================= MODAL 6: 聯盟球季清單管理 ================= -->
+  <div id="seasonManagerModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-5 space-y-4 shadow-2xl max-h-[90vh] flex flex-col">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3 shrink-0">
+        <div>
+          <h3 class="font-black text-base text-slate-900">聯盟球季清單管理</h3>
+          <p class="text-[11px] text-slate-500">新增球季、設定現行賽季，並可一鍵沿用上一季球隊與組別編制</p>
+        </div>
+        <button onclick="closeSeasonManagerModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="space-y-4 text-xs overflow-y-auto pr-1 custom-scrollbar">
+        <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+          <div class="font-black text-slate-800">新增 / 編輯球季</div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">球季代碼 *</label>
+              <input type="text" id="newSeasonIdInput" placeholder="例如：2027-S19" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">球季顯示名稱 *</label>
+              <input type="text" id="newSeasonNameInput" placeholder="例如：2027 第 19 季" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">年度</label>
+              <input type="number" id="newSeasonYearInput" placeholder="2027" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-4 pt-1">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" id="newSeasonIsCurrentInput" checked class="w-4 h-4 text-emerald-600 rounded border-slate-300">
+              <span class="font-bold text-slate-800">設為現行賽季</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" id="newSeasonCarryOverTeamsInput" checked class="w-4 h-4 text-indigo-600 rounded border-slate-300">
+              <span class="font-bold text-slate-800">自動沿用現行球季的球隊與組別編制</span>
+            </label>
+          </div>
+
+          <div class="flex justify-end">
+            <button type="button" onclick="submitNewSeason()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm">
+              + 新增 / 儲存球季
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="font-black text-slate-800">已建立球季清單</div>
+          <div id="seasonManagerListContainer" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2 border-t border-slate-100 shrink-0">
+        <button onclick="closeSeasonManagerModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 7: 球隊加入球季與各季組別歷史設定 ================= -->
+  <div id="teamSeasonModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-black text-base text-slate-900">球隊加入球季與各季組別設定</h3>
+          <p id="teamSeasonModalSub" class="text-[11px] text-slate-500">設定加入球季、各季參賽組別與歷史戰績</p>
+        </div>
+        <button onclick="closeTeamSeasonModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">球隊初始加入球季 (Joined Season)</label>
+          <select id="assignTeamJoinedSeason" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white"></select>
+        </div>
+
+        <div class="pt-2 border-t border-slate-100 space-y-3">
+          <div class="font-black text-slate-800">指定球季參賽組別與歷史戰績</div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">目標球季</label>
+              <select id="assignTargetSeason" onchange="onAssignTargetSeasonChange(this.value)" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white"></select>
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">該季所屬組別</label>
+              <select id="assignTargetDivision" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+                <option value="大聯盟">大聯盟</option>
+                <option value="小聯盟">小聯盟</option>
+                <option value="育成組">育成組</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">勝場 (W)</label>
+              <input type="number" id="assignSeasonWins" min="0" placeholder="0" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">敗場 (L)</label>
+              <input type="number" id="assignSeasonLosses" min="0" placeholder="0" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">和局 (T)</label>
+              <input type="number" id="assignSeasonTies" min="0" placeholder="0" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+            </div>
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">名次 / 歷史備註</label>
+            <input type="text" id="assignSeasonRankNote" placeholder="例如：例行賽第1名 / 季後賽亞軍" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="closeTeamSeasonModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100">取消</button>
+        <button onclick="submitTeamSeasonAssignment()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 shadow">儲存球季與組別設定</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
