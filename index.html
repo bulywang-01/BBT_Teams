@@ -67,6 +67,11 @@
         </div>
 
         <div class="flex items-center space-x-2 sm:space-x-3">
+          <button id="btnOpenCreateAccount" onclick="openCreateAccountModal()" class="hidden bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-bold px-3 py-1.5 rounded-xl transition border border-emerald-500/40 items-center space-x-1.5">
+            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">建立帳號</span>
+          </button>
+
           <button id="btnOpenSelfProfile" onclick="openSelfProfileModal()" class="hidden bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-bold px-3 py-1.5 rounded-xl transition border border-slate-700 items-center space-x-1.5">
             <i data-lucide="user-cog" class="w-3.5 h-3.5"></i>
             <span class="hidden sm:inline">個人資料</span>
@@ -224,15 +229,19 @@
           <!-- TAB 1: 球員名單 -->
           <div id="panel-roster" class="tab-panel p-5 space-y-4">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div class="flex items-center space-x-1.5">
+              <div class="flex flex-wrap items-center gap-1.5">
                 <button onclick="filterRosterRole('all')" id="filter-role-all" class="px-3 py-1 rounded-lg text-xs font-black bg-slate-800 text-white">全部編制</button>
                 <button onclick="filterRosterRole('player')" id="filter-role-player" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">現役球員</button>
                 <button onclick="filterRosterRole('coach')" id="filter-role-coach" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">教練團</button>
                 <button onclick="filterRosterRole('manager')" id="filter-role-manager" class="px-3 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">球團經理</button>
               </div>
 
-              <div class="flex items-center space-x-2">
-                <span class="text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg font-bold border border-emerald-200">💡 點擊姓名開啟「中職風格球員卡」</span>
+              <div class="flex flex-wrap items-center gap-2">
+                <button id="btnOpenEnrollExisting" onclick="openEnrollExistingModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow flex items-center space-x-1">
+                  <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                  <span>+ 挑選已建帳號登錄本隊</span>
+                </button>
+                <span class="text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg font-bold border border-emerald-200">💡 點擊姓名開啟「球員卡與歷屆球隊/背號」</span>
               </div>
             </div>
 
@@ -408,7 +417,7 @@
       <form onsubmit="submitLogin(event)" class="p-6 space-y-4 text-xs">
         <div>
           <label class="font-bold text-slate-700 block mb-1">登入帳號 / 球員代號 (User ID)</label>
-          <input type="text" id="loginAccountInput" required placeholder="例如：admin 或 U1024" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 font-bold text-slate-800 focus:outline-none focus:border-emerald-500">
+          <input type="text" id="loginAccountInput" required placeholder="例如：bbtadmin 或 P-123456" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 font-bold text-slate-800 focus:outline-none focus:border-emerald-500">
         </div>
         <div>
           <label class="font-bold text-slate-700 block mb-1">登入密碼</label>
@@ -423,20 +432,159 @@
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-500 space-y-1">
           <div class="font-black text-slate-700">💡 登入與權限說明：</div>
-          <div>• 請使用 <code class="bg-slate-200 px-1 rounded">Users</code> 表設定的帳號或 <code class="bg-slate-200 px-1 rounded">user_id</code> 登入</div>
+          <div>• 使用 <code class="bg-slate-200 px-1 rounded">Users</code> 表設定的帳號或系統自動產生的 <code class="bg-slate-200 px-1 rounded">P-XXXXXX</code> 登入</div>
           <div>• 依 <code class="bg-slate-200 px-1 rounded">global_role</code> 與 <code class="bg-slate-200 px-1 rounded">team_roles</code> 自動套用總管理員、球隊管理員或球員權限</div>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- ================= MODAL 0.5: 個人資料編輯 ================= -->
-  <div id="selfProfileModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+  <!-- ================= MODAL 0.2: 建立新帳號 (自動產號 P-XXXXXX) ================= -->
+  <div id="createAccountModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-black text-base text-slate-900">建立聯盟帳號（自動產生球員代號）</h3>
+          <p class="text-[11px] text-slate-500">由系統自動產生唯一 <code class="bg-slate-100 px-1 rounded">P-XXXXXX</code>，免手動填代號；背號由各隊登錄設定</p>
+        </div>
+        <button onclick="closeCreateAccountModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">中文姓名 *</label>
+            <input type="text" id="newAccPlayerName" placeholder="例如：陳冠宇" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">登入帳號 (留空預設為自動產號)</label>
+            <input type="text" id="newAccAccount" placeholder="選填，例如：chen01" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">初始密碼 (預設 1234)</label>
+            <input type="text" id="newAccPassword" placeholder="1234" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">指派所屬球隊</label>
+            <select id="newAccTeamId" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white"></select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">系統角色權限</label>
+            <select id="newAccRoleLevel" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+              <option value="player">一般球員 (player)</option>
+              <option value="team_admin">球隊管理員 (team_admin)</option>
+            </select>
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">編制身分 (role_type)</label>
+            <select id="newAccRoleType" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+              <option value="player">現役球員 (player)</option>
+              <option value="coach">教練團 (coach)</option>
+              <option value="manager">球團經理 (manager)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">守備位置</label>
+            <input type="text" id="newAccPosition" placeholder="例如：SS / 2B" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">投打習慣</label>
+            <select id="newAccBatThrow" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+              <option value="右投右打">右投右打</option>
+              <option value="右投左打">右投左打</option>
+              <option value="左投左打">左投左打</option>
+              <option value="左投右打">左投右打</option>
+              <option value="右投兩打">右投兩打</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">聯絡電話</label>
+            <input type="text" id="newAccPhone" placeholder="0912-345-678" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Email</label>
+            <input type="text" id="newAccEmail" placeholder="player@example.com" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+        </div>
+
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">備註</label>
+          <input type="text" id="newAccNote" placeholder="備註說明" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+        </div>
+
+        <label class="flex items-center space-x-2 pt-1 cursor-pointer">
+          <input type="checkbox" id="newAccEnrollNow" checked class="w-4 h-4 text-emerald-600 rounded border-slate-300">
+          <span class="font-bold text-slate-700">建立後同時登錄進上方所選球隊名單（背號可於名單中再設定）</span>
+        </label>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="closeCreateAccountModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100">取消</button>
+        <button onclick="submitCreateUserAccount()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow">建立帳號</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 0.4: 挑選已建帳號登錄本隊 ================= -->
+  <div id="enrollExistingModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
         <div>
+          <h3 class="font-black text-base text-slate-900">挑選已建帳號登錄本隊</h3>
+          <p class="text-[11px] text-slate-500">直接從已建立帳號挑選人員並設定本隊背號與身分</p>
+        </div>
+        <button onclick="closeEnrollExistingModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">選擇已建帳號</label>
+          <select id="enrollExistingUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white"></select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">本隊背號</label>
+            <input type="text" id="enrollNumber" placeholder="例如：18" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">本隊編制身分</label>
+            <select id="enrollRoleType" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+              <option value="player">現役球員 (player)</option>
+              <option value="coach">教練團 (coach)</option>
+              <option value="manager">球團經理 (manager)</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">本隊守備位置 (留空沿用個人設定)</label>
+          <input type="text" id="enrollPosition" placeholder="例如：P / OF" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+        </div>
+      </div>
+      <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="closeEnrollExistingModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100">取消</button>
+        <button onclick="enrollExistingUserToTeam()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow">確認登錄本隊</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 0.5: 個人資料編輯 ================= -->
+  <div id="selfProfileModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
           <h3 class="font-black text-base text-slate-900">我的個人資料與帳號設定</h3>
-          <p class="text-[11px] text-slate-500">可自行維護守備位置、投打習慣、聯絡電話與登入密碼</p>
+          <p class="text-[11px] text-slate-500">可自行維護守備位置、投打習慣、聯絡電話、Email 與登入密碼</p>
         </div>
         <button onclick="closeSelfProfileModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
@@ -447,7 +595,7 @@
             <input type="text" id="selfName" disabled class="w-full border border-slate-200 bg-slate-100 text-slate-500 rounded-xl px-3 py-2 font-bold">
           </div>
           <div>
-            <label class="font-bold text-slate-500 block mb-1">登錄背號 (由球隊管理員維護)</label>
+            <label class="font-bold text-slate-500 block mb-1">登錄背號 (由各隊設定)</label>
             <input type="text" id="selfNumber" disabled class="w-full border border-slate-200 bg-slate-100 text-slate-500 rounded-xl px-3 py-2 font-bold">
           </div>
         </div>
@@ -467,9 +615,19 @@
             </select>
           </div>
         </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">聯絡電話 / LINE</label>
+            <input type="text" id="selfPhone" placeholder="請輸入聯絡電話" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Email</label>
+            <input type="text" id="selfEmail" placeholder="player@example.com" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          </div>
+        </div>
         <div>
-          <label class="font-bold text-slate-700 block mb-1">聯絡電話 / LINE 聯絡方式</label>
-          <input type="text" id="selfPhone" placeholder="請輸入聯絡電話" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
+          <label class="font-bold text-slate-700 block mb-1">備註說明</label>
+          <input type="text" id="selfNote" placeholder="備註說明" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold">
         </div>
         <div>
           <label class="font-bold text-slate-700 block mb-1">變更登入密碼 (不修改請留空)</label>
@@ -499,7 +657,7 @@
           <select id="roleMgrTeamSelect" onchange="BBTAuth.populateRoleMgrPlayerSelect()" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white"></select>
         </div>
         <div>
-          <label class="font-bold text-slate-700 block mb-1">選擇人員 (球員 / 教練 / 領隊)</label>
+          <label class="font-bold text-slate-700 block mb-1">選擇人員 (帳號 / 球員)</label>
           <select id="roleMgrUserSelect" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white"></select>
         </div>
         <div>
@@ -518,10 +676,10 @@
     </div>
   </div>
 
-  <!-- ================= MODAL 1: 中職球員卡 ================= -->
+  <!-- ================= MODAL 1: 中職球員卡 (含歷屆球隊與背號) ================= -->
   <div id="playerCardModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-700">
-      <div class="player-card-bg p-6 text-white">
+    <div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-700 max-h-[92vh] flex flex-col">
+      <div class="player-card-bg p-6 text-white shrink-0">
         <div class="flex justify-between items-start">
           <div>
             <span class="bg-amber-500 text-slate-950 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-widest">BBT ALL-STAR CARD</span>
@@ -551,7 +709,7 @@
         </div>
       </div>
 
-      <div class="p-5 bg-white space-y-4">
+      <div class="p-5 bg-white space-y-4 overflow-y-auto custom-scrollbar">
         <div class="flex items-center justify-between">
           <span class="text-xs font-black text-slate-800">個人成績數據面板</span>
           <div class="bg-slate-100 p-1 rounded-xl flex text-xs font-bold">
@@ -585,6 +743,17 @@
               <div><span class="text-[10px] text-slate-400">FPCT</span><strong id="stat-fpct" class="text-emerald-600 font-black">1.000</strong></div>
               <div><span class="text-[10px] text-slate-400">E</span><strong id="stat-err" class="font-black">0</strong></div>
             </div>
+          </div>
+        </div>
+
+        <!-- 歷屆成員 / 曾效力球隊與背號軌跡 -->
+        <div>
+          <div class="text-[11px] font-black text-slate-500 mb-1.5 flex items-center gap-1">
+            <i data-lucide="history" class="w-3.5 h-3.5 text-emerald-600"></i>
+            <span>歷屆球隊與背號紀錄</span>
+          </div>
+          <div id="cardCareerHistory" class="bg-slate-50 rounded-xl border border-slate-200 p-2.5 space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar text-xs">
+            <div class="text-slate-400 text-center py-2">尚無歷屆紀錄</div>
           </div>
         </div>
 
@@ -779,7 +948,7 @@
 
   <!-- ================= 前端主控邏輯 ================= -->
   <script>
-    let globalData = { teams: [], roster: [], stats: [], announcements: [], transactions: [], attendance: [] };
+    let globalData = { teams: [], roster: [], stats: [], announcements: [], transactions: [], attendance: [], users: [], history: [] };
     let currentSelectedTeamId = '';
     let currentDivision = '大聯盟';
     let currentSeason = '2026-S18';
@@ -804,6 +973,8 @@
         globalData.announcements = res.announcements || [];
         globalData.transactions = res.transactions || [];
         globalData.attendance = res.attendance || [];
+        globalData.users = res.users || [];
+        globalData.history = res.history || [];
 
         const restoredUser = BBTAuth.restoreSession();
 
@@ -821,6 +992,155 @@
         alert('無法連線至 Google Sheets 資料庫，請檢查 API 網址或部署權限。');
       }
       lucide.createIcons();
+    }
+
+    // --- 建立帳號 (自動產生 P-XXXXXX) 與挑選已建帳號登錄本隊 ---
+    function openCreateAccountModal() {
+      const teamSel = document.getElementById('newAccTeamId');
+      const teamsList = globalData.teams || [];
+      teamSel.innerHTML = `<option value="">-- 僅建立帳號，暫不指定球隊 --</option>` + teamsList.map(t =>
+        `<option value="${t.team_id}">${t.team_name} (${t.division})</option>`
+      ).join('');
+      if (currentSelectedTeamId) teamSel.value = currentSelectedTeamId;
+
+      document.getElementById('newAccPlayerName').value = '';
+      document.getElementById('newAccAccount').value = '';
+      document.getElementById('newAccPassword').value = '';
+      document.getElementById('newAccPosition').value = '';
+      document.getElementById('newAccPhone').value = '';
+      document.getElementById('newAccEmail').value = '';
+      document.getElementById('newAccNote').value = '';
+      document.getElementById('newAccEnrollNow').checked = Boolean(currentSelectedTeamId);
+
+      document.getElementById('createAccountModal').classList.remove('hidden');
+      document.getElementById('createAccountModal').classList.add('flex');
+      lucide.createIcons();
+    }
+
+    function closeCreateAccountModal() {
+      document.getElementById('createAccountModal').classList.add('hidden');
+      document.getElementById('createAccountModal').classList.remove('flex');
+    }
+
+    async function submitCreateUserAccount() {
+      const playerName = document.getElementById('newAccPlayerName').value.trim();
+      const customAccount = document.getElementById('newAccAccount').value.trim();
+      const password = document.getElementById('newAccPassword').value.trim();
+      const teamId = document.getElementById('newAccTeamId').value.trim();
+      const roleLevel = document.getElementById('newAccRoleLevel').value;
+      const roleType = document.getElementById('newAccRoleType').value;
+      const position = document.getElementById('newAccPosition').value.trim();
+      const batThrow = document.getElementById('newAccBatThrow').value;
+      const phone = document.getElementById('newAccPhone').value.trim();
+      const email = document.getElementById('newAccEmail').value.trim();
+      const note = document.getElementById('newAccNote').value.trim();
+      const enrollNow = document.getElementById('newAccEnrollNow').checked && Boolean(teamId);
+
+      if (!playerName && !customAccount) {
+        alert('請至少填寫中文姓名或登入帳號');
+        return;
+      }
+
+      const res = await BBTApi.createUserAccount({
+        player_name: playerName,
+        ...(customAccount ? { account: customAccount } : {}),
+        ...(password ? { password: password } : {}),
+        team_id: teamId,
+        role_level: roleLevel,
+        role_type: roleType,
+        position,
+        bat_throw: batThrow,
+        phone,
+        email,
+        note,
+        enroll_in_roster: enrollNow,
+        is_active: true
+      });
+
+      if (res && res.result === 'ok') {
+        alert(`✅ 帳號建立成功！\n自動產生代號 (user_id)：${res.user_id}\n登入帳號：${res.account}`);
+        closeCreateAccountModal();
+        await initSystem();
+      } else {
+        alert('❌ 建立帳號失敗: ' + (res && res.message ? res.message : ''));
+      }
+    }
+
+    function openEnrollExistingModal() {
+      if (!currentSelectedTeamId) {
+        alert('請先選擇目標球隊');
+        return;
+      }
+      renderAvailableUsersForEnrollment('enrollExistingUserSelect', currentSelectedTeamId);
+      document.getElementById('enrollNumber').value = '';
+      document.getElementById('enrollPosition').value = '';
+      document.getElementById('enrollExistingModal').classList.remove('hidden');
+      document.getElementById('enrollExistingModal').classList.add('flex');
+      lucide.createIcons();
+    }
+
+    function closeEnrollExistingModal() {
+      document.getElementById('enrollExistingModal').classList.add('hidden');
+      document.getElementById('enrollExistingModal').classList.remove('flex');
+    }
+
+    function renderAvailableUsersForEnrollment(selectId, teamId) {
+      const selectEl = document.getElementById(selectId);
+      if (!selectEl) return;
+
+      const allUsers = globalData.users || [];
+      const teamRoster = (globalData.roster || []).filter(r => String(r.team_id) === String(teamId));
+      const enrolledIds = new Set(teamRoster.map(r => String(r.user_id).trim()));
+
+      const candidates = allUsers.filter(u => {
+        const uid = String(u.user_id || '').trim();
+        if (!uid || enrolledIds.has(uid)) return false;
+        const active = u.is_active === true || String(u.is_active).toUpperCase() === 'TRUE' || String(u.is_active) === '1';
+        return active;
+      });
+
+      if (candidates.length === 0) {
+        selectEl.innerHTML = `<option value="">-- 目前無可登錄的已建帳號 --</option>`;
+        return;
+      }
+
+      selectEl.innerHTML = `<option value="">-- 請選擇已建帳號 --</option>` + candidates.map(u => {
+        const nameLabel = u.player_name || u.account || u.user_id;
+        return `<option value="${u.user_id}">${nameLabel} (${u.user_id} / 帳號: ${u.account})</option>`;
+      }).join('');
+    }
+
+    async function enrollExistingUserToTeam() {
+      const userId = document.getElementById('enrollExistingUserSelect').value.trim();
+      const numberVal = document.getElementById('enrollNumber').value.trim();
+      const roleType = document.getElementById('enrollRoleType').value;
+      const positionVal = document.getElementById('enrollPosition').value.trim();
+
+      if (!currentSelectedTeamId) { alert('請先選擇目標球隊'); return; }
+      if (!userId) { alert('請先選擇要登錄的帳號'); return; }
+
+      const matchedUser = (globalData.users || []).find(u => String(u.user_id).trim() === userId) || {};
+      const playerName = matchedUser.player_name || matchedUser.account || userId;
+
+      const res = await BBTApi.saveRoster({
+        team_id: currentSelectedTeamId,
+        user_id: userId,
+        player_name: playerName,
+        number: numberVal,
+        role_type: roleType,
+        position: positionVal || matchedUser.position || '',
+        bat_throw: matchedUser.bat_throw || '',
+        phone: matchedUser.phone || '',
+        status: 'approved'
+      });
+
+      if (res && res.result === 'ok') {
+        alert(`✅ 已將 ${playerName} (${userId}) 登錄至本隊！`);
+        closeEnrollExistingModal();
+        await initSystem();
+      } else {
+        alert('❌ 登錄本隊失敗: ' + (res && res.message ? res.message : ''));
+      }
     }
 
     function renderTeamSidebar(searchKeyword = '') {
@@ -1342,6 +1662,7 @@
         const p = cardRes.profile;
         const season = cardRes.season_stat;
         const career = cardRes.career_stat;
+        const careerHistory = cardRes.career_history || [];
 
         document.getElementById('cardNumber').innerText = `#${p.number || '—'}`;
         document.getElementById('cardName').innerText = p.player_name || '未知球員';
@@ -1352,6 +1673,25 @@
           awardsContainer.innerHTML = career.awards_list.map(aw => `<span class="bg-amber-500/20 border border-amber-400/40 text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded">🏆 ${aw.season} ${aw.title}</span>`).join('');
         } else {
           awardsContainer.innerHTML = `<span class="bg-slate-800 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded">尚無登錄獎項</span>`;
+        }
+
+        const historyContainer = document.getElementById('cardCareerHistory');
+        if (careerHistory.length > 0) {
+          historyContainer.innerHTML = careerHistory.map(h => `
+            <div class="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-100">
+              <div>
+                <span class="font-black text-slate-800">${h.team_name || h.team_id || '—'}</span>
+                <span class="ml-1.5 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">${h.number ? `#${h.number}` : '背號未填'}</span>
+                <span class="ml-1 text-[10px] text-slate-400">${h.event_type || ''}</span>
+              </div>
+              <div class="text-[10px] text-slate-400 text-right">
+                <div>${h.season || ''}</div>
+                <div>${h.date || ''}</div>
+              </div>
+            </div>
+          `).join('');
+        } else {
+          historyContainer.innerHTML = `<div class="text-slate-400 text-center py-2">尚無歷屆球隊與背號紀錄</div>`;
         }
 
         const btnEditSelf = document.getElementById('btnCardEditSelf');
@@ -1444,9 +1784,12 @@
 
       tbody.innerHTML = txs.map(tx => {
         const pObj = globalData.roster.find(r => String(r.user_id) === String(tx.user_id));
+        const uObj = globalData.users.find(u => String(u.user_id) === String(tx.user_id));
         let displayName = tx.user_id;
         if (pObj) {
           displayName = pObj.number ? `#${pObj.number} ${pObj.player_name}` : pObj.player_name;
+        } else if (uObj && uObj.player_name) {
+          displayName = uObj.player_name;
         }
 
         return `
