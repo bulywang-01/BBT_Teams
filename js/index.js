@@ -741,21 +741,40 @@ function renderOverviewKpiBoard() {
 
   const kpiCardsGrid = document.getElementById('kpiTeamCount')?.closest('.grid');
   if (kpiCardsGrid) {
-    kpiCardsGrid.classList.remove('grid-cols-1', 'md:grid-cols-4');
-    kpiCardsGrid.classList.add('grid-cols-2', 'sm:grid-cols-3', 'lg:grid-cols-5', 'gap-2.5', 'sm:gap-3');
+    kpiCardsGrid.classList.remove('grid-cols-1', 'grid-cols-2', 'sm:grid-cols-3', 'md:grid-cols-4', 'lg:grid-cols-5', 'gap-2.5', 'sm:gap-3');
+    kpiCardsGrid.classList.add('grid-cols-3', 'sm:grid-cols-5', 'gap-1.5', 'sm:gap-2.5');
 
     let faKpiCard = document.getElementById('kpiAnnualFaCard');
     if (!faKpiCard) {
       faKpiCard = document.createElement('div');
       faKpiCard.id = 'kpiAnnualFaCard';
-      faKpiCard.className = 'bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3.5 sm:p-4';
       kpiCardsGrid.appendChild(faKpiCard);
     }
+    faKpiCard.className = 'bg-slate-50/90 border border-slate-200/80 rounded-xl p-2 sm:p-3 min-w-0';
+
+    const existingCards = Array.from(kpiCardsGrid.children);
+    existingCards.forEach(card => {
+      card.classList.remove('p-3.5', 'p-4', 'rounded-2xl');
+      card.classList.add('rounded-xl', 'p-2', 'sm:p-3', 'min-w-0');
+      const divs = card.querySelectorAll('div');
+      if (divs[0]) {
+        divs[0].className = 'text-[10px] sm:text-[11px] font-bold text-slate-500 truncate';
+      }
+      if (divs[1]) {
+        divs[1].className = divs[1].className
+          .replace(/text-2xl|text-3xl/g, 'text-lg')
+          .replace(/mt-1/g, 'mt-0.5') + ' sm:text-2xl leading-tight';
+      }
+      if (divs[2]) {
+        divs[2].className = 'text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate';
+      }
+    });
+
     const winStatus = checkFaWindowStatus_();
     faKpiCard.innerHTML = `
-      <div class="text-[11px] font-bold text-slate-500">年度 FA 人數</div>
-      <div id="kpiAnnualFaCount" class="text-2xl sm:text-3xl font-black text-purple-700 mt-1">${annualFaCount}</div>
-      <div class="text-[11px] text-slate-400 mt-1">已核准 ${annualApprovedFaCount} 人 · ${winStatus.isOpen ? '申請開放中' : '申請未開放'}</div>
+      <div class="text-[10px] sm:text-[11px] font-bold text-slate-500 truncate">年度 FA</div>
+      <div id="kpiAnnualFaCount" class="text-lg sm:text-2xl font-black text-purple-700 mt-0.5 leading-tight">${annualFaCount}</div>
+      <div class="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate">核准 ${annualApprovedFaCount} · ${winStatus.isOpen ? '開放中' : '未開放'}</div>
     `;
   }
 
@@ -764,16 +783,19 @@ function renderOverviewKpiBoard() {
     btnKpiCreate.classList.toggle('hidden', !isSuper);
     const actionBar = btnKpiCreate.parentElement;
     if (actionBar) {
+      actionBar.classList.add('flex-wrap', 'gap-1.5');
+      btnKpiCreate.className = 'bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] sm:text-xs font-black px-2.5 sm:px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1 whitespace-nowrap shrink-0';
+      btnKpiCreate.innerHTML = `<span>+ 新增球隊</span>`;
+
       let faBtn = document.getElementById('btnKpiFaReview');
       if (!faBtn) {
         faBtn = document.createElement('button');
         faBtn.id = 'btnKpiFaReview';
         faBtn.type = 'button';
         faBtn.onclick = openLeagueFaCenterModal;
-        faBtn.className = 'bg-purple-600 hover:bg-purple-700 text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 whitespace-nowrap shrink-0';
         actionBar.insertBefore(faBtn, btnKpiCreate);
       }
-      faBtn.classList.toggle('hidden', !isSuper);
+      faBtn.className = `${isSuper ? '' : 'hidden '}bg-purple-600 hover:bg-purple-700 text-white text-[11px] sm:text-xs font-black px-2.5 sm:px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1 whitespace-nowrap shrink-0`;
       faBtn.innerHTML = `
         <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
         <span>FA 審查${pendingTxCount > 0 ? ` (${pendingTxCount})` : ''}</span>
@@ -785,16 +807,22 @@ function renderOverviewKpiBoard() {
         seasonBtn.id = 'btnKpiSeasonMgr';
         seasonBtn.type = 'button';
         seasonBtn.onclick = openSeasonManagerModal;
-        seasonBtn.className = 'bg-slate-800 hover:bg-slate-900 text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 whitespace-nowrap shrink-0';
         actionBar.insertBefore(seasonBtn, faBtn);
       }
       if (seasonBtn) {
-        seasonBtn.classList.toggle('hidden', !isSuper);
+        seasonBtn.className = `${isSuper ? '' : 'hidden '}bg-slate-800 hover:bg-slate-900 text-white text-[11px] sm:text-xs font-black px-2.5 sm:px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1 whitespace-nowrap shrink-0`;
         seasonBtn.innerHTML = `
           <i data-lucide="calendar-range" class="w-3.5 h-3.5 text-emerald-400"></i>
           <span>球季管理</span>
         `;
       }
+
+      Array.from(actionBar.children).forEach(child => {
+        if (child.tagName === 'BUTTON' || child.tagName === 'A') {
+          child.classList.remove('px-3.5', 'py-2', 'rounded-xl');
+          child.classList.add('px-2.5', 'sm:px-3', 'py-1.5', 'rounded-lg', 'text-[11px]', 'sm:text-xs');
+        }
+      });
     }
   }
 
