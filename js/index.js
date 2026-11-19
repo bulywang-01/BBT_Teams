@@ -627,7 +627,10 @@ async function saveLeagueFaWindowSetting() {
 
   refreshLeagueFaCenterContent_(nextCfg);
   renderOverviewKpiBoard();
-  alert('✅ 已儲存並同步年度 FA 申請開關與期間設定！');
+  closeLeagueFaCenterModal();
+  if (typeof showActionStatus === 'function') {
+    showActionStatus('已儲存年度 FA 申請期間設定', 'success', 2400);
+  }
 }
 
 function renderOverviewKpiBoard() {
@@ -3247,14 +3250,13 @@ function renderSeasonDropdowns_() {
     if (isSuper) btnSeasonMgr.classList.add('flex');
   }
 
-  // 2. 頂部 Header 球季選單
+  // 2. 頂部 Header 球季選單（允許多個球季並行，不顯示單一「現行賽季」標示）
   const seasonSelect = document.getElementById('seasonSelect');
   if (seasonSelect) {
     const prevVal = currentSeason || seasonSelect.value;
-    seasonSelect.innerHTML = seasons.map(s => {
-      const currentTag = s.is_current ? ' (現行賽季)' : '';
-      return `<option value="${s.season_id}">${s.season_name}${currentTag}</option>`;
-    }).join('');
+    seasonSelect.innerHTML = seasons.map(s =>
+      `<option value="${s.season_id}">${s.season_name}</option>`
+    ).join('');
 
     if (seasons.some(s => s.season_id === prevVal)) {
       seasonSelect.value = prevVal;
@@ -3424,24 +3426,18 @@ function renderSeasonManagerList_() {
   const seasons = getNormalizedSeasonsList_();
 
   container.innerHTML = seasons.map(s => `
-    <div class="p-3 rounded-xl border ${s.is_current ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white'} flex items-center justify-between gap-2">
+    <div class="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-2">
       <div class="min-w-0">
         <div class="flex items-center gap-2 flex-wrap">
           <span class="font-black text-slate-900">${s.season_name}</span>
           <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold text-[10px]">${s.season_id}</span>
-          ${s.is_current ? '<span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-black text-[10px]">現行賽季</span>' : ''}
         </div>
         <div class="text-[11px] text-slate-400 mt-0.5">年度：${s.year}</div>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
-        <button type="button" onclick="startEditSeason_('${String(s.season_id).replace(/'/g, "\'")}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] whitespace-nowrap">
+        <button type="button" onclick="startEditSeason_('${String(s.season_id).replace(/'/g, "\\'")}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] whitespace-nowrap">
           異動
         </button>
-        ${!s.is_current ? `
-          <button type="button" onclick="setAsCurrentSeason('${String(s.season_id).replace(/'/g, "\'")}')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-bold text-[11px] whitespace-nowrap">
-            設為現行賽季
-          </button>
-        ` : ''}
       </div>
     </div>
   `).join('');
@@ -3477,16 +3473,13 @@ async function submitNewSeason() {
 
   if (res && res.result === 'ok') {
     const existingList = getNormalizedSeasonsList_();
-    const updatedList = existingList.map(item => ({
-      ...item,
-      is_current: isCurrent ? false : item.is_current
-    }));
+    const updatedList = existingList.map(item => ({ ...item }));
     const idx = updatedList.findIndex(item => item.season_id === seasonId);
     const nextItem = {
       season_id: seasonId,
       season_name: seasonName,
       year: yearVal,
-      is_current: isCurrent,
+      is_current: isCurrent || (idx >= 0 ? updatedList[idx].is_current : true),
       status: 'active'
     };
     if (idx >= 0) {
