@@ -1716,7 +1716,7 @@ function renderFaGuideBanner_(isSuperAdmin) {
         <span>→ 等待聯盟審核 → 申請成功</span>
       </div>
       <div class="flex flex-wrap items-center gap-1">
-        <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-black whitespace-nowrap">聯盟配對方式</span>
+        <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-black whitespace-nowrap">聯盟配對</span>
         <span>知會原球隊 →</span>
         <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">線上填寫表格 (點我)</button>
         <span>→ 等待聯盟通知 → 待球員選擇隊伍 → 申請成功</span>
@@ -1872,8 +1872,8 @@ function ensureFaModeSelector_() {
   wrap.innerHTML = `
     <label class="block text-xs font-bold text-slate-700 mb-1">FA 申請途徑（由球員提出並知會原球隊）</label>
     <select id="faFlowModeSelect" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white">
-      <option value="已確定FA隊伍">〔已確定FA隊伍〕知會原球隊 → 自行接洽新球隊 → 填表 → 等待聯盟審核</option>
-      <option value="聯盟配對方式">〔聯盟配對方式〕知會原球隊 → 填表 → 等待聯盟通知 → 待球員選擇隊伍</option>
+      <option value="已確定FA隊伍">已確定FA隊伍</option>
+      <option value="聯盟配對">聯盟配對</option>
     </select>
   `;
   host.parentElement.insertBefore(wrap, host);
@@ -1943,7 +1943,7 @@ async function submitFaApply() {
     tx_type: 'FA申請',
     user_id,
     from_team_id: currentSelectedTeamId,
-    to_team_id: flowMode === '聯盟配對方式' ? 'LEAGUE_MATCH' : 'FA_MARKET',
+    to_team_id: flowMode === '聯盟配對' ? 'LEAGUE_MATCH' : 'FA_MARKET',
     note: combinedNote
   });
   if (res && res.result === 'ok') {
