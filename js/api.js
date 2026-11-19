@@ -1,6 +1,6 @@
 // ============================================================================
 // BBT 軟式棒球聯盟 - 全新站點 API 服務模組 (api.js)
-// 整合帳號登入、Session Token 夾帶、個人資料維護與權限指派
+// 整合帳號登入、Session Token 夾帶、建帳與選帳登錄、個人資料與權限指派
 // ============================================================================
 
 const API_BASE_URL = "https://script.google.com/macros/s/AKfycbznsSicatWVvF2kBJAnjIQ-5WlVs-NCKHGG-EWTAg5NC8D7mb1Laj9aHthoN6qKHsFBLg/exec";
@@ -70,7 +70,7 @@ const BBTApi = {
     localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
   },
 
-  // --- 帳號登入、登出、個人資料與權限 ---
+  // --- 帳號登入、登出、建帳、個人資料與權限 ---
   async login(account, password) {
     const res = await callApi('login', { account: account, password: password });
     if (res && res.result === 'ok' && res.token) {
@@ -86,6 +86,10 @@ const BBTApi = {
     const res = await callApi('logout', {});
     this.clearSession();
     return res;
+  },
+
+  async createUserAccount(accountPayload) {
+    return await callApi('createUserAccount', { data: JSON.stringify(accountPayload) });
   },
 
   async updateSelfProfile(profileData) {
@@ -142,7 +146,7 @@ const BBTApi = {
   },
 
   // 🌟 跨表遠端讀取共用賽事表
-  async getRemoteSchedule(scheduleSheetId, sheetName = 'Schedule') {
+  async getRemoteSchedule(scheduleSheetId, sheetName = 'Games') {
     return await callApi('getRemoteSchedule', { schedule_sheet_id: scheduleSheetId, sheet_name: sheetName });
   }
 };
