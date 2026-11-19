@@ -1,5 +1,6 @@
 // ============================================================================
-// BBT 軟式棒球聯盟 - 前端主控邏輯 (index.js) - 支援全聯盟分組總覽與手機緊湊版面
+// BBT 軟式棒球聯盟 - 前端主控邏輯 (index.js)
+// 支援全聯盟分組總覽、手機緊湊版面、本隊/他隊已核准FA、FA審查與聯盟/本隊公告上下分區
 // ============================================================================
 
 let globalData = {
@@ -7,6 +8,7 @@ let globalData = {
   roster: [],
   stats: [],
   announcements: [],
+  league_announcements: [],
   transactions: [],
   attendance: [],
   users: [],
@@ -24,6 +26,7 @@ let activePlayerCardCache = null;
 let activeCardUserId = '';
 let globalGameCache = {};
 let currentUser = null;
+let pendingReviewTxCache = null;
 
 const REMOTE_SCHEDULE_SHEET_ID = '1kgJti-vuALVDPhVWHdb0G5_Ows4Usp61Y00L9JMrrmw';
 const DIVISION_ORDER = ['大聯盟', '小聯盟', '育成組'];
@@ -39,6 +42,7 @@ async function initSystem() {
     globalData.roster = res.roster || [];
     globalData.stats = res.stats || [];
     globalData.announcements = res.announcements || [];
+    globalData.league_announcements = res.league_announcements || [];
     globalData.transactions = res.transactions || [];
     globalData.attendance = res.attendance || [];
     globalData.users = res.users || [];
@@ -147,11 +151,9 @@ function groupTeamsByDivision(teamsList) {
 function syncMobileViewportLayout(hasSelectedTeam) {
   const leftSidebar = document.getElementById('leftTeamSidebar');
   if (leftSidebar) {
-    // 手機版（< lg）一律隱藏左側清單，避免與主畫面全球隊卡片重複；桌機版（lg:block）維持顯示
     leftSidebar.classList.add('hidden', 'lg:block');
   }
 
-  // 在已選球隊的標頭區動態加入手機版「返回全球隊」快捷鈕
   const selectedSection = document.getElementById('selectedTeamSection');
   if (selectedSection && hasSelectedTeam) {
     let backBar = document.getElementById('mobileBackToTeamsBar');
@@ -234,7 +236,6 @@ function renderOverviewKpiBoard() {
   document.getElementById('kpiTxHistoryCount').innerText = historyTotal;
   document.getElementById('kpiPendingTxSub').innerText = `待審核 ${pendingTxCount} 筆`;
 
-  // 確保 KPI 四格在手機上維持緊湊 2x2 排列
   const kpiCardsGrid = document.getElementById('kpiTeamCount')?.closest('.grid');
   if (kpiCardsGrid) {
     kpiCardsGrid.classList.remove('grid-cols-1');
@@ -251,7 +252,6 @@ function renderOverviewKpiBoard() {
     chipsEl.classList.add('hidden');
   }
 
-  // 渲染依組別區分的隊圖 + 隊名卡片牆（手機 3 欄緊湊網格、不換行截斷）
   let boardEl = document.getElementById('allTeamsDivisionBoard');
   if (!boardEl && chipsEl && chipsEl.parentElement) {
     boardEl = document.createElement('div');
@@ -437,7 +437,9 @@ async function submitCreateUserAccount() {
         status: 'approved'
       });
     }
-    alert(`✅ 帳號建立成功！\n自動產生代號 (user_id)：${res.user_id}\n登入帳號：${res.account}`);
+    alert(`✅ 帳號建立成功！
+自動產生代號 (user_id)：${res.user_id}
+登入帳號：${res.account}`);
     closeCreateAccountModal();
     await initSystem();
   } else {
@@ -481,7 +483,7 @@ function closeEnrollExistingModal() {
 
 function isInactiveRosterStatus_(statusVal) {
   const s = String(statusVal || '').trim().toLowerCase();
-  return ['inactive', 'released', 'left', 'retired', '離隊', '停用', '釋出'].includes(s);
+  return ['inactive', 'released', 'left', 'retired', 'fa', '離隊', '停用', '釋出'].includes(s);
 }
 
 function isApprovedFaToTargetTeam_(userId, targetTeamId) {
@@ -515,7 +517,6 @@ function renderAvailableUsersForEnrollment(selectId, teamId) {
   const allUsers = globalData.users || [];
   const allRoster = globalData.roster || [];
 
-  // 找出「目前在其他球隊為現役狀態」的 user_id 集合，以及「已在本隊名單內」的 user_id 集合
   const enrolledInCurrentTeamIds = new Set();
   const activeInOtherTeamIds = new Set();
 
@@ -524,9 +525,9 @@ function renderAvailableUsersForEnrollment(selectId, teamId) {
     const rTeamId = String(r.team_id || '').trim();
     if (!uid) return;
 
-    if (rTeamId === targetTeamId) {
+    if (rTeamId === targetTeamId && !isInactiveRosterStatus_(r.status)) {
       enrolledInCurrentTeamIds.add(uid);
-    } else if (rTeamId && !isInactiveRosterStatus_(r.status)) {
+    } else if (rTeamId && rTeamId !== targetTeamId && !isInactiveRosterStatus_(r.status)) {
       activeInOtherTeamIds.add(uid);
     }
   });
@@ -544,7 +545,6 @@ function renderAvailableUsersForEnrollment(selectId, teamId) {
       String(u.is_active) === '1';
     if (!active) return false;
 
-    // 若已在他隊現役，除非已確定 FA 核准到本隊，否則不可出現在選單
     if (activeInOtherTeamIds.has(uid)) {
       return isApprovedFaToTargetTeam_(uid, targetTeamId);
     }
@@ -695,7 +695,7 @@ async function submitEditRoster() {
   }
 }
 
-// --- 桌機版左側聯盟球隊清單（依組別區分，精簡只顯示隊圖 + 隊名） ---
+// --- 桌機版左側聯盟球隊清單 ---
 function renderTeamSidebar(searchKeyword = '') {
   const container = document.getElementById('teamSidebarContainer');
   const isAllDiv = currentDivision === 'ALL';
@@ -886,7 +886,7 @@ function parseScheduleDate_(rawDate) {
 
 function getCurrentWeekMonday_() {
   const now = new Date();
-  const day = now.getDay(); // 0=日, 1=一, ..., 6=六
+  const day = now.getDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
 }
@@ -946,7 +946,6 @@ async function loadRemoteScheduleOptions() {
       currentUser && (currentUser.role === 'super_admin' || currentUser.role === 'team_admin')
     );
 
-    // 先建立所有場次的顯示文字快取
     res.schedule.forEach(g => {
       const valId = String(g.game_id || '').trim();
       if (!valId) return;
@@ -986,20 +985,17 @@ async function loadRemoteScheduleOptions() {
       globalGameCache[valId] = `[${dateTimeDisplay}] vs ${opponent}`;
     });
 
-    // 1. 該隊對戰賽事（含組別比對）
     const teamGames = res.schedule.filter(g => {
       if (!String(g.game_id || '').trim()) return false;
       return isTeamInGame_(g, currentTeam) && isDivisionMatch_(g, activeDiv);
     });
 
-    // 2. 本週（週一至週日）（含）之後的賽事
     const upcomingGames = teamGames.filter(g => {
       const gDate = parseScheduleDate_(g.date);
-      if (!gDate) return true; // 若日期未填寫則保留供點名
+      if (!gDate) return true;
       return gDate >= weekMonday;
     });
 
-    // 3. 歷史賽事（本週一之前，僅供管理者修正實際出勤）
     const historyGames = isManagerRole
       ? teamGames.filter(g => {
           const gDate = parseScheduleDate_(g.date);
@@ -1298,7 +1294,7 @@ function renderRosterTable() {
     const pStats = globalData.stats.find(s => String(s.user_id) === String(p.user_id) && String(s.season) === currentSeason);
     const statSummary = pStats ? `AVG .${Math.floor((pStats.h / (pStats.ab || 1)) * 1000)} / HR ${pStats.hr || 0}` : '尚無打擊紀錄';
     const isMe = currentUser && String(p.user_id) === String(currentUser.user_id);
-    const safeRosterId = String(p.roster_id || '').replace(/'/g, "\\'");
+    const safeRosterId = String(p.roster_id || '').replace(/'/g, "\'");
 
     return `
       <tr class="hover:bg-slate-50 transition ${isMe ? 'bg-emerald-50/40' : ''}">
@@ -1423,30 +1419,212 @@ function toggleCardStats(type) {
   }
 }
 
+// --- 公告上下分區：上方聯盟公告（Announcements）、下方本隊公告（Team_Announcements） ---
 function renderAnnouncements() {
   const container = document.getElementById('announcementsContainer');
-  if (!currentSelectedTeamId) return;
+  if (!container) return;
 
-  const teamAnn = globalData.announcements.filter(a => String(a.team_id) === String(currentSelectedTeamId));
+  const leagueList = globalData.league_announcements || [];
+  const teamList = currentSelectedTeamId
+    ? (globalData.announcements || []).filter(a => String(a.team_id) === String(currentSelectedTeamId))
+    : [];
 
-  if (teamAnn.length === 0) {
-    container.innerHTML = `<div class="p-4 text-center text-slate-400 text-xs">目前尚無球隊公告</div>`;
+  const renderAnnCards = (list, badgeText, badgeClass, emptyText) => {
+    if (!list || list.length === 0) {
+      return `<div class="p-3 text-center text-slate-400 text-xs bg-slate-50/70 rounded-xl border border-dashed border-slate-200">${emptyText}</div>`;
+    }
+    return `<div class="space-y-2">` + list.map(a => `
+      <div class="p-3 rounded-xl border border-slate-200 bg-white space-y-1">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span class="${badgeClass} text-[10px] font-black px-2 py-0.5 rounded whitespace-nowrap shrink-0">${badgeText}</span>
+            <span class="bg-slate-100 text-slate-700 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap shrink-0">${a.category || '公告'}</span>
+            <span class="font-black text-xs sm:text-sm text-slate-900 truncate">${a.title || ''}</span>
+          </div>
+          <span class="text-[10px] text-slate-400 whitespace-nowrap shrink-0">${a.created_at || ''}</span>
+        </div>
+        <p class="text-xs text-slate-600 leading-relaxed">${a.content || ''}</p>
+      </div>
+    `).join('') + `</div>`;
+  };
+
+  container.innerHTML = `
+    <div class="space-y-4">
+      <div class="space-y-2">
+        <div class="flex items-center justify-between gap-2 pb-1 border-b border-amber-200/80">
+          <div class="flex items-center gap-1.5 whitespace-nowrap">
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span class="text-xs font-black text-slate-900">聯盟公告</span>
+            <span class="text-[11px] font-bold text-slate-400">(${leagueList.length})</span>
+          </div>
+          <span class="text-[10px] text-amber-700 font-bold whitespace-nowrap">全聯盟同步</span>
+        </div>
+        ${renderAnnCards(leagueList, '聯盟', 'bg-amber-100 text-amber-800', '目前尚無聯盟公告')}
+      </div>
+
+      <div class="space-y-2">
+        <div class="flex items-center justify-between gap-2 pb-1 border-b border-emerald-200/80">
+          <div class="flex items-center gap-1.5 whitespace-nowrap">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span class="text-xs font-black text-slate-900">本隊公告</span>
+            <span class="text-[11px] font-bold text-slate-400">(${teamList.length})</span>
+          </div>
+          <span class="text-[10px] text-emerald-700 font-bold whitespace-nowrap">隊內通知</span>
+        </div>
+        ${renderAnnCards(teamList, '本隊', 'bg-emerald-100 text-emerald-800', '目前尚無本隊公告')}
+      </div>
+    </div>
+  `;
+}
+
+// --- FA 審查彈窗與操作 ---
+function ensureFaReviewModal_() {
+  if (document.getElementById('faReviewModal')) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'faReviewModal';
+  modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-3';
+  modal.innerHTML = `
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+      <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
+        <div class="font-black text-sm flex items-center gap-1.5 whitespace-nowrap">
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+          <span id="faReviewModalTitle">FA 資格審查</span>
+        </div>
+        <button onclick="closeFaReviewModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 whitespace-nowrap">✕</button>
+      </div>
+      <div class="p-4 space-y-3 text-xs">
+        <div id="faReviewSummaryBox" class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1 text-slate-700"></div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">審查決定</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" id="btnFaDecisionApprove" onclick="setFaReviewDecision('approved')" class="py-2 px-3 rounded-xl font-black border transition whitespace-nowrap">✓ 核准 FA</button>
+            <button type="button" id="btnFaDecisionReject" onclick="setFaReviewDecision('rejected')" class="py-2 px-3 rounded-xl font-black border transition whitespace-nowrap">✕ 駁回申請</button>
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">審查備註（選填）</label>
+          <input id="faReviewNoteInput" type="text" placeholder="例如：符合出賽門檻，准予登錄 FA 市場" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-emerald-500">
+        </div>
+        <label id="faPublishAnnWrap" class="flex items-center gap-2 pt-1 cursor-pointer select-none">
+          <input id="faPublishAnnCheckbox" type="checkbox" checked class="w-4 h-4 rounded text-emerald-600 border-slate-300">
+          <span class="font-bold text-slate-700">核准後自動發布聯盟 FA 公告</span>
+        </label>
+      </div>
+      <div class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+        <button type="button" onclick="closeFaReviewModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 whitespace-nowrap">取消</button>
+        <button type="button" id="btnConfirmFaReview" onclick="submitFaReviewDecision()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm whitespace-nowrap">確認送出</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function setFaReviewDecision(decision) {
+  const modal = document.getElementById('faReviewModal');
+  if (!modal) return;
+  modal.dataset.decision = decision;
+
+  const approveBtn = document.getElementById('btnFaDecisionApprove');
+  const rejectBtn = document.getElementById('btnFaDecisionReject');
+  const publishWrap = document.getElementById('faPublishAnnWrap');
+
+  if (decision === 'approved') {
+    approveBtn.className = 'py-2 px-3 rounded-xl font-black border border-emerald-600 bg-emerald-600 text-white transition whitespace-nowrap';
+    rejectBtn.className = 'py-2 px-3 rounded-xl font-black border border-slate-200 bg-white text-slate-600 hover:bg-rose-50 transition whitespace-nowrap';
+    if (publishWrap) publishWrap.classList.remove('hidden');
+  } else {
+    rejectBtn.className = 'py-2 px-3 rounded-xl font-black border border-rose-600 bg-rose-600 text-white transition whitespace-nowrap';
+    approveBtn.className = 'py-2 px-3 rounded-xl font-black border border-slate-200 bg-white text-slate-600 hover:bg-emerald-50 transition whitespace-nowrap';
+    if (publishWrap) publishWrap.classList.add('hidden');
+  }
+}
+
+function openFaReviewModal(txId, defaultDecision = 'approved') {
+  const isSuper = currentUser && currentUser.role === 'super_admin';
+  if (!isSuper) {
+    alert('僅聯盟總管理員可進行 FA 審查');
     return;
   }
 
-  container.innerHTML = teamAnn.map(a => `
-    <div class="p-3.5 rounded-xl border border-slate-200 bg-white space-y-1">
-      <div class="flex items-center space-x-2">
-        <span class="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded">${a.category || '公告'}</span>
-        <span class="font-black text-sm text-slate-900">${a.title}</span>
-      </div>
-      <p class="text-xs text-slate-600">${a.content}</p>
-      <div class="text-[10px] text-slate-400 text-right">${a.created_at || ''}</div>
+  const tx = (globalData.transactions || []).find(t => String(t.tx_id || '').trim() === String(txId || '').trim());
+  if (!tx) {
+    alert('找不到該筆 FA 申請紀錄');
+    return;
+  }
+
+  ensureFaReviewModal_();
+  pendingReviewTxCache = tx;
+
+  const playerLabel = formatTxPlayerName_(tx);
+  const fromTeamObj = (globalData.teams || []).find(t => String(t.team_id) === String(tx.from_team_id));
+  const fromTeamName = fromTeamObj ? fromTeamObj.team_name : (tx.from_team_id || '—');
+
+  document.getElementById('faReviewSummaryBox').innerHTML = `
+    <div class="flex items-center justify-between gap-2">
+      <span class="font-black text-slate-900">${playerLabel}</span>
+      <span class="text-[10px] font-bold text-slate-400">${tx.tx_id}</span>
     </div>
-  `).join('');
+    <div class="text-slate-600">原所屬球隊：<span class="font-bold text-slate-800">${fromTeamName}</span></div>
+    <div class="text-slate-600">申請說明：${tx.note || '—'}</div>
+  `;
+
+  document.getElementById('faReviewNoteInput').value = '';
+  document.getElementById('faPublishAnnCheckbox').checked = true;
+  setFaReviewDecision(defaultDecision);
+
+  const modal = document.getElementById('faReviewModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-let currentTxScopeFilter = 'all'; // 'all' | 'mine' | 'others_approved'
+function closeFaReviewModal() {
+  const modal = document.getElementById('faReviewModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  pendingReviewTxCache = null;
+}
+
+async function submitFaReviewDecision() {
+  const modal = document.getElementById('faReviewModal');
+  if (!pendingReviewTxCache || !modal) return;
+
+  const decision = modal.dataset.decision || 'approved';
+  const reviewNote = document.getElementById('faReviewNoteInput')?.value.trim() || '';
+  const publishAnnouncement = Boolean(document.getElementById('faPublishAnnCheckbox')?.checked);
+
+  const submitBtn = document.getElementById('btnConfirmFaReview');
+  if (submitBtn) submitBtn.disabled = true;
+
+  try {
+    const res = await BBTApi.reviewFaTransaction({
+      tx_id: pendingReviewTxCache.tx_id,
+      decision: decision,
+      admin_status: decision,
+      review_note: reviewNote,
+      publish_announcement: decision === 'approved' && publishAnnouncement
+    });
+
+    if (res && res.result === 'ok') {
+      alert(decision === 'approved'
+        ? '✅ 已核准 FA 申請並同步更新狀態／公告！'
+        : '✅ 已駁回該筆 FA 申請！');
+      closeFaReviewModal();
+      await initSystem();
+      if (currentSelectedTeamId) {
+        selectTeam(currentSelectedTeamId);
+      }
+    } else {
+      alert('❌ 審查失敗: ' + (res && res.message ? res.message : '未知錯誤'));
+    }
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+let currentTxScopeFilter = 'all';
 
 function setTxScopeFilter(scope) {
   currentTxScopeFilter = scope;
@@ -1468,6 +1646,11 @@ function isApprovedTxStatus(statusVal) {
 function isApprovedStatus_(statusVal) {
   const s = String(statusVal || '').trim().toLowerCase();
   return s === 'approved' || s === '已核准' || s === '核准' || s === '通過';
+}
+
+function isPendingStatus_(statusVal) {
+  const s = String(statusVal || '').trim().toLowerCase();
+  return !s || s === 'pending' || s === '待審核' || s === '審核中';
 }
 
 function isFaRecord_(tx) {
@@ -1510,6 +1693,7 @@ function renderTransactions() {
   const currentTeam = (globalData.teams || []).find(
     t => String(t.team_id) === String(currentSelectedTeamId)
   );
+  const isSuper = currentUser && currentUser.role === 'super_admin';
 
   // 1. 自己球隊的 FA（含審核中 / 已核准等狀態，優先排在最前）
   const myTeamFaList = allTxs.filter(
@@ -1523,9 +1707,20 @@ function renderTransactions() {
 
   const renderRow = (tx, tagText, tagClass) => {
     const statusText = tx.admin_status || 'pending';
-    const statusClass = isApprovedStatus_(statusText)
+    const approved = isApprovedStatus_(statusText);
+    const pending = isPendingStatus_(statusText);
+    const statusClass = approved
       ? 'bg-emerald-100 text-emerald-800'
-      : 'bg-amber-100 text-amber-800';
+      : (pending ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800');
+
+    const reviewActionsHtml = (isSuper && pending && tx.tx_id)
+      ? `
+        <div class="mt-1.5 flex items-center justify-end gap-1">
+          <button onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'approved')" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black whitespace-nowrap">核准</button>
+          <button onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'rejected')" class="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-black whitespace-nowrap">駁回</button>
+        </div>
+      `
+      : '';
 
     return `
       <tr class="hover:bg-slate-50 transition">
@@ -1538,6 +1733,7 @@ function renderTransactions() {
         <td class="p-3 text-slate-700">${tx.note || '—'}</td>
         <td class="p-3 text-right whitespace-nowrap">
           <span class="${statusClass} font-bold px-2 py-0.5 rounded-full text-[11px]">${statusText}</span>
+          ${reviewActionsHtml}
         </td>
       </tr>
     `;
@@ -1545,7 +1741,6 @@ function renderTransactions() {
 
   let html = '';
 
-  // 區塊一：本隊 FA
   html += `
     <tr class="bg-emerald-50/70">
       <td colspan="5" class="px-3 py-2 text-[11px] font-black text-emerald-800 whitespace-nowrap">
@@ -1561,7 +1756,6 @@ function renderTransactions() {
     html += `<tr><td colspan="5" class="p-3 text-center text-xs text-slate-400">本隊目前尚無 FA 紀錄</td></tr>`;
   }
 
-  // 區塊二：他隊已審核通過的 FA
   html += `
     <tr class="bg-slate-100/80">
       <td colspan="5" class="px-3 py-2 text-[11px] font-black text-slate-700 whitespace-nowrap">
@@ -1630,14 +1824,23 @@ async function submitAnnouncement() {
   const category = document.getElementById('annCategory').value;
   const title = document.getElementById('annTitle').value;
   const content = document.getElementById('annContent').value;
+  const scopeSelect = document.getElementById('annScopeSelect');
+  const scopeVal = scopeSelect ? scopeSelect.value : 'team';
 
   if (!title || !content) { alert('請填寫標題與內容'); return; }
 
-  const res = await BBTApi.saveAnnouncement({ team_id: currentSelectedTeamId, category, title, content });
+  const payload = scopeVal === 'league'
+    ? { team_id: 'ALL', scope: 'league', category, title, content }
+    : { team_id: currentSelectedTeamId, scope: 'team', category, title, content };
+
+  const res = await BBTApi.saveAnnouncement(payload);
   if (res && res.result === 'ok') {
     alert('✅ 公告已成功發布！');
     closeAnnouncementModal();
-    initSystem();
+    await initSystem();
+    if (currentSelectedTeamId) {
+      renderAnnouncements();
+    }
   } else {
     alert('❌ 發布失敗: ' + (res && res.message ? res.message : ''));
   }
