@@ -370,15 +370,16 @@ const BBTAuth = {
       this.toggleManagementControls(true);
 
       if (typeof renderTeamSidebar === 'function') renderTeamSidebar();
-      if (typeof renderOverviewKpiBoard === 'function') renderOverviewKpiBoard();
 
-      const filteredTeams = teamsList.filter(t => String(t.division).trim() === window.currentDivision);
       if (window.currentSelectedTeamId && teamsList.some(t => String(t.team_id) === String(window.currentSelectedTeamId))) {
         if (typeof selectTeam === 'function') selectTeam(window.currentSelectedTeamId);
-      } else if (filteredTeams.length > 0) {
-        if (typeof selectTeam === 'function') selectTeam(filteredTeams[0].team_id);
-      } else if (typeof renderOverviewKpiBoard === 'function') {
-        renderOverviewKpiBoard();
+      } else {
+        window.currentSelectedTeamId = '';
+        if (typeof showKpiOverview === 'function') {
+          showKpiOverview();
+        } else if (typeof renderOverviewKpiBoard === 'function') {
+          renderOverviewKpiBoard();
+        }
       }
     } else {
       if (leftSidebar) leftSidebar.classList.add('hidden');
