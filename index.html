@@ -63,8 +63,7 @@
 
         <div class="flex items-center gap-1.5">
           <select id="seasonSelect" onchange="onSeasonChange(this.value)" class="bg-slate-800 text-white border border-slate-700 rounded-xl px-3 py-1.5 font-bold">
-            <option value="2026-S18">2026 第 18 季 (現行賽季)</option>
-            <option value="2026-S17">2026 第 17 季</option>
+            <option value="">載入球季中...</option>
           </select>
           <button id="btnOpenSeasonManager" onclick="openSeasonManagerModal()" class="hidden bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/40 text-xs font-bold px-2.5 py-1.5 rounded-xl transition items-center gap-1 whitespace-nowrap">
             <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
@@ -130,7 +129,7 @@
           <div>
             <div class="flex items-center space-x-2">
               <span class="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full">KPI OVERVIEW</span>
-              <span id="kpiSeasonBadge" class="text-xs font-bold text-slate-400">2026-S18</span>
+              <span id="kpiSeasonBadge" class="text-xs font-bold text-slate-400">—</span>
             </div>
             <h2 id="kpiSectionTitle" class="font-black text-lg text-slate-900 mt-1">大聯盟 — 賽季即時 KPI 總覽</h2>
           </div>
@@ -448,8 +447,7 @@
           <div>
             <label class="font-bold text-slate-700 block mb-1">加入球季 (Joined Season)</label>
             <select id="newTeamSeason" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
-              <option value="2026-S18">2026 第 18 季 (2026-S18)</option>
-              <option value="2026-S17">2026 第 17 季 (2026-S17)</option>
+              <option value="">載入球季中...</option>
             </select>
           </div>
         </div>
@@ -817,7 +815,7 @@
         <div class="flex items-center justify-between">
           <span class="text-xs font-black text-slate-800">個人成績數據面板</span>
           <div class="bg-slate-100 p-1 rounded-xl flex text-xs font-bold">
-            <button onclick="toggleCardStats('season')" id="btn-stat-season" class="px-3 py-1 rounded-lg bg-bbt-navy text-white shadow">本季數據 (2026)</button>
+            <button onclick="toggleCardStats('season')" id="btn-stat-season" class="px-3 py-1 rounded-lg bg-bbt-navy text-white shadow">本季數據</button>
             <button onclick="toggleCardStats('career')" id="btn-stat-career" class="px-3 py-1 rounded-lg text-slate-600">生涯累計</button>
           </div>
         </div>
@@ -1070,15 +1068,15 @@
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
               <label class="font-bold text-slate-700 block mb-1">球季代碼 *</label>
-              <input type="text" id="newSeasonIdInput" placeholder="例如：2027-S19" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+              <input type="text" id="newSeasonIdInput" placeholder="例如：YYYY-SX" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
             </div>
             <div>
               <label class="font-bold text-slate-700 block mb-1">球季顯示名稱 *</label>
-              <input type="text" id="newSeasonNameInput" placeholder="例如：2027 第 19 季" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+              <input type="text" id="newSeasonNameInput" placeholder="例如：年度第 X 季" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
             </div>
             <div>
               <label class="font-bold text-slate-700 block mb-1">年度</label>
-              <input type="number" id="newSeasonYearInput" placeholder="2027" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
+              <input type="number" id="newSeasonYearInput" placeholder="年度" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white">
             </div>
           </div>
 
