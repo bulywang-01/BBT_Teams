@@ -66,12 +66,10 @@ const BBTAuth = {
     }
   },
 
-  /**
-   * 將後端回傳的 user 物件標準化為前端使用的 { user_id, name, role, team_id, title, managed_team_ids, member_team_ids }
-   */
-  normalizeBackendUser(backendUser, rosterList = [], teamsList = []) {
+  normalizeBackendUser(backendUser, rosterList = [], teamsList = [], usersList = []) {
     const uid = String(backendUser.user_id || '').trim();
     const matchedPlayer = rosterList.find(r => String(r.user_id).trim() === uid) || {};
+    const matchedUserRow = usersList.find(u => String(u.user_id).trim() === uid) || {};
 
     let role = 'player';
     if (String(backendUser.global_role || '').trim() === 'super_admin') {
@@ -100,8 +98,10 @@ const BBTAuth = {
 
     const teamObj = teamsList.find(t => String(t.team_id) === String(primaryTeamId));
     const displayName = matchedPlayer.player_name
+      || matchedUserRow.player_name
+      || backendUser.player_name
       || backendUser.name
-      || (role === 'super_admin' ? '王韶文 (系統總管)' : (backendUser.account || uid));
+      || (role === 'super_admin' ? '系統管理員' : (backendUser.account || uid));
 
     const roleTitleMap = {
       'super_admin': '聯盟最高總管理員',
@@ -167,12 +167,12 @@ const BBTAuth = {
     try {
       const rosterList = (window.globalData && window.globalData.roster) || [];
       const teamsList = (window.globalData && window.globalData.teams) || [];
+      const usersList = (window.globalData && window.globalData.users) || [];
 
-      // 1. 優先呼叫後端 GAS BBTApi.login
       if (typeof BBTApi !== 'undefined' && typeof BBTApi.login === 'function') {
         const apiRes = await BBTApi.login(account, password);
         if (apiRes && apiRes.result === 'ok' && apiRes.user) {
-          const normalized = this.normalizeBackendUser(apiRes.user, rosterList, teamsList);
+          const normalized = this.normalizeBackendUser(apiRes.user, rosterList, teamsList, usersList);
           this.setSession(normalized, apiRes.token || '');
           this.closeLoginModal();
           if (typeof initSystem === 'function') {
@@ -180,23 +180,21 @@ const BBTAuth = {
           }
           return;
         }
-        // 若後端明確回傳帳號密碼錯誤或停用，直接顯示後端訊息
         if (apiRes && apiRes.result === 'error' && apiRes.message && !apiRes.message.includes('找不到 Users')) {
           throw new Error(apiRes.message);
         }
       }
 
-      // 2. 若後端 Users 表尚未建置或回傳找不到 Users，則使用本機名單比對備援
       const roleOverrides = JSON.parse(localStorage.getItem(this.ROLE_OVERRIDE_KEY) || '{}');
       const customPasswords = JSON.parse(localStorage.getItem(this.CUSTOM_PWD_KEY) || '{}');
 
-      if (account.toLowerCase() === 'admin') {
-        const expectedPwd = customPasswords['admin'] || '1234';
+      if (account.toLowerCase() === 'admin' || account.toLowerCase() === 'bbsadmin' || account.toLowerCase() === 'bbtadmin') {
+        const expectedPwd = customPasswords[account.toLowerCase()] || '1234';
         if (password !== expectedPwd) throw new Error('總管理員密碼錯誤');
         this.setSession({
-          user_id: 'ADMIN',
-          account: 'admin',
-          name: '王韶文 (系統總管)',
+          user_id: '9001',
+          account: account,
+          name: '系統管理員',
           role: 'super_admin',
           global_role: 'super_admin',
           team_id: '',
@@ -207,39 +205,46 @@ const BBTAuth = {
           String(r.user_id).toLowerCase() === account.toLowerCase() ||
           String(r.player_name).trim() === account
         );
+        const matchedUser = usersList.find(u =>
+          String(u.account).toLowerCase() === account.toLowerCase() ||
+          String(u.user_id).toLowerCase() === account.toLowerCase()
+        );
 
-        if (!matchedPlayer) {
+        if (!matchedPlayer && !matchedUser) {
           throw new Error('找不到此帳號或球員代號，請確認輸入是否正確。');
         }
 
-        const expectedPwd = customPasswords[matchedPlayer.user_id] || matchedPlayer.password || '1234';
+        const uid = matchedPlayer ? matchedPlayer.user_id : matchedUser.user_id;
+        const expectedPwd = customPasswords[uid] || '1234';
         if (password !== expectedPwd) {
           throw new Error('登入密碼錯誤（預設密碼為 1234）');
         }
 
-        let assignedRole = roleOverrides[matchedPlayer.user_id] || matchedPlayer.system_role || '';
-        if (!assignedRole) {
+        let assignedRole = roleOverrides[uid] || 'player';
+        if (!roleOverrides[uid] && matchedPlayer) {
           const rType = String(matchedPlayer.role_type || '').toLowerCase();
           if (rType.includes('coach') || rType.includes('leader') || rType.includes('教練') || rType.includes('領隊') || rType.includes('隊長')) {
             assignedRole = 'team_admin';
-          } else {
-            assignedRole = 'player';
           }
         }
+
+        const displayName = (matchedPlayer && matchedPlayer.player_name)
+          || (matchedUser && matchedUser.player_name)
+          || account;
 
         const roleTitleMap = {
           'super_admin': '聯盟最高總管理員',
           'team_admin': '球隊管理員 (教練/領隊)',
-          'player': `現役隊員${matchedPlayer.number ? ` (#${matchedPlayer.number})` : ''}`
+          'player': `現役隊員${matchedPlayer && matchedPlayer.number ? ` (#${matchedPlayer.number})` : ''}`
         };
 
         this.setSession({
-          user_id: matchedPlayer.user_id,
-          account: matchedPlayer.user_id,
-          name: matchedPlayer.player_name,
+          user_id: uid,
+          account: account,
+          name: displayName,
           role: assignedRole,
           global_role: assignedRole === 'super_admin' ? 'super_admin' : 'user',
-          team_id: matchedPlayer.team_id,
+          team_id: matchedPlayer ? matchedPlayer.team_id : '',
           title: roleTitleMap[assignedRole] || '聯盟成員'
         });
       }
@@ -272,10 +277,12 @@ const BBTAuth = {
 
     const rosterList = (window.globalData && window.globalData.roster) || [];
     const teamsList = (window.globalData && window.globalData.teams) || [];
-    const hasRosterProfile = rosterList.some(r => String(r.user_id) === String(user.user_id));
+    const usersList = (window.globalData && window.globalData.users) || [];
+    const hasProfile = rosterList.some(r => String(r.user_id) === String(user.user_id))
+      || usersList.some(u => String(u.user_id) === String(user.user_id));
 
     const btnSelf = document.getElementById('btnOpenSelfProfile');
-    if (hasRosterProfile) {
+    if (hasProfile) {
       btnSelf.classList.remove('hidden');
       btnSelf.classList.add('flex');
     } else {
@@ -284,12 +291,24 @@ const BBTAuth = {
     }
 
     const btnRoleMgr = document.getElementById('btnOpenAdminRoleMgr');
+    const btnCreateAcc = document.getElementById('btnOpenCreateAccount');
     if (role === 'super_admin') {
       btnRoleMgr.classList.remove('hidden');
       btnRoleMgr.classList.add('flex');
+      if (btnCreateAcc) {
+        btnCreateAcc.classList.remove('hidden');
+        btnCreateAcc.classList.add('flex');
+      }
     } else {
       btnRoleMgr.classList.add('hidden');
       btnRoleMgr.classList.remove('flex');
+      if (btnCreateAcc && role === 'team_admin') {
+        btnCreateAcc.classList.remove('hidden');
+        btnCreateAcc.classList.add('flex');
+      } else if (btnCreateAcc) {
+        btnCreateAcc.classList.add('hidden');
+        btnCreateAcc.classList.remove('flex');
+      }
     }
 
     const leftSidebar = document.getElementById('leftTeamSidebar');
@@ -344,6 +363,7 @@ const BBTAuth = {
     const btnTeamEdit = document.getElementById('btnTeamProfileEdit');
     const btnBatchAtt = document.getElementById('btnBatchAttendance');
     const btnNewAnn = document.getElementById('btnNewAnnouncement');
+    const btnEnrollExisting = document.getElementById('btnOpenEnrollExisting');
     const singleAttText = document.getElementById('btnSingleAttendanceText');
     const attHeader = document.getElementById('attendanceHeaderTitle');
 
@@ -351,12 +371,14 @@ const BBTAuth = {
       btnTeamEdit.classList.remove('hidden');
       btnBatchAtt.classList.remove('hidden');
       btnNewAnn.classList.remove('hidden');
+      if (btnEnrollExisting) btnEnrollExisting.classList.remove('hidden');
       singleAttText.innerText = '+ 單筆回報';
       attHeader.innerText = '球員出席回報與請假管理控制台';
     } else {
       btnTeamEdit.classList.add('hidden');
       btnBatchAtt.classList.add('hidden');
       btnNewAnn.classList.add('hidden');
+      if (btnEnrollExisting) btnEnrollExisting.classList.add('hidden');
       singleAttText.innerText = '+ 我要出席回報 / 請假';
       attHeader.innerText = '我的賽前出勤回報與球隊出賽狀態';
     }
@@ -366,17 +388,22 @@ const BBTAuth = {
     const user = this.getCurrentUser();
     if (!user) return;
     const rosterList = (window.globalData && window.globalData.roster) || [];
+    const usersList = (window.globalData && window.globalData.users) || [];
     const pObj = rosterList.find(r => String(r.user_id) === String(user.user_id));
-    if (!pObj) {
-      alert('此管理員帳號未綁定球員名單資料');
+    const uObj = usersList.find(u => String(u.user_id) === String(user.user_id));
+
+    if (!pObj && !uObj) {
+      alert('此管理員帳號未綁定人員資料');
       return;
     }
 
-    document.getElementById('selfName').value = pObj.player_name || '';
-    document.getElementById('selfNumber').value = pObj.number ? `#${pObj.number}` : '未設定';
-    document.getElementById('selfPosition').value = pObj.position || '';
-    document.getElementById('selfBatThrow').value = pObj.bat_throw || '右投右打';
-    document.getElementById('selfPhone').value = pObj.phone || '';
+    document.getElementById('selfName').value = (pObj && pObj.player_name) || (uObj && uObj.player_name) || user.name || '';
+    document.getElementById('selfNumber').value = (pObj && pObj.number) ? `#${pObj.number}` : '由各隊登錄';
+    document.getElementById('selfPosition').value = (pObj && pObj.position) || (uObj && uObj.position) || '';
+    document.getElementById('selfBatThrow').value = (pObj && pObj.bat_throw) || (uObj && uObj.bat_throw) || '右投右打';
+    document.getElementById('selfPhone').value = (pObj && pObj.phone) || (uObj && uObj.phone) || '';
+    document.getElementById('selfEmail').value = (uObj && uObj.email) || '';
+    document.getElementById('selfNote').value = (uObj && uObj.note) || '';
     document.getElementById('selfNewPassword').value = '';
 
     document.getElementById('selfProfileModal').classList.remove('hidden');
@@ -397,6 +424,8 @@ const BBTAuth = {
     const position = document.getElementById('selfPosition').value.trim();
     const bat_throw = document.getElementById('selfBatThrow').value;
     const phone = document.getElementById('selfPhone').value.trim();
+    const email = document.getElementById('selfEmail').value.trim();
+    const note = document.getElementById('selfNote').value.trim();
     const newPwd = document.getElementById('selfNewPassword').value.trim();
 
     if (pObj) {
@@ -418,6 +447,8 @@ const BBTAuth = {
         position,
         bat_throw,
         phone,
+        email,
+        note,
         ...(newPwd ? { new_password: newPwd } : {})
       });
       if (res && res.result === 'error') {
@@ -428,7 +459,7 @@ const BBTAuth = {
 
     alert('✅ 個人資料已更新！');
     this.closeSelfProfileModal();
-    if (typeof renderRosterTable === 'function') renderRosterTable();
+    if (typeof initSystem === 'function') await initSystem();
   },
 
   openAdminRoleModal() {
@@ -450,16 +481,21 @@ const BBTAuth = {
   populateRoleMgrPlayerSelect() {
     const teamId = document.getElementById('roleMgrTeamSelect').value;
     const userSel = document.getElementById('roleMgrUserSelect');
+    const usersList = (window.globalData && window.globalData.users) || [];
     const rosterList = (window.globalData && window.globalData.roster) || [];
-    const members = rosterList.filter(r => String(r.team_id) === String(teamId));
     const roleOverrides = JSON.parse(localStorage.getItem(this.ROLE_OVERRIDE_KEY) || '{}');
 
-    userSel.innerHTML = members.length > 0
-      ? members.map(m => {
-          const curRole = roleOverrides[m.user_id] || '預設';
-          return `<option value="${m.user_id}">#${m.number || '—'} ${m.player_name} [${m.role_type || 'player'}] (目前權限: ${curRole})</option>`;
-        }).join('')
-      : `<option value="">該球隊尚無登錄人員</option>`;
+    const options = usersList.map(u => {
+      const uid = String(u.user_id || '').trim();
+      const rObj = rosterList.find(r => String(r.user_id).trim() === uid && String(r.team_id).trim() === String(teamId).trim());
+      const nameLabel = rObj ? `#${rObj.number || '—'} ${rObj.player_name}` : (u.player_name || u.account || uid);
+      const curRole = roleOverrides[uid] || u.global_role || '預設';
+      return `<option value="${uid}">${nameLabel} (${uid}) [目前: ${curRole}]</option>`;
+    });
+
+    userSel.innerHTML = options.length > 0
+      ? options.join('')
+      : `<option value="">尚無帳號資料</option>`;
   },
 
   async saveAssignedUserRole() {
@@ -485,6 +521,7 @@ const BBTAuth = {
     }
 
     alert('✅ 已成功指派該帳號權限！下次該帳號登入時將套用新權限。');
+    if (typeof initSystem === 'function') await initSystem();
     this.populateRoleMgrPlayerSelect();
   }
 };
