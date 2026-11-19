@@ -3247,21 +3247,28 @@ function renderSeasonDropdowns_() {
     if (isSuper) btnSeasonMgr.classList.add('flex');
   }
 
-  // 2. 頂部 Header 球季選單（允許多個球季並行，不顯示單一「現行賽季」標示）
+// 2. 頂部 Header 球季選單（允許多個球季並行，不顯示單一「現行賽季」標示）
   const seasonSelect = document.getElementById('seasonSelect');
   if (seasonSelect) {
-    const prevVal = currentSeason || seasonSelect.value;
-    seasonSelect.innerHTML = seasons.map(s =>
-      `<option value="${s.season_id}">${s.season_name}</option>`
-    ).join('');
-
-    if (seasons.some(s => s.season_id === prevVal)) {
-      seasonSelect.value = prevVal;
+    if (!Array.isArray(seasons) || seasons.length === 0) {
+      currentSeason = '';
+      seasonSelect.innerHTML = '<option value="">目前無資料，請新增球季</option>';
+      seasonSelect.value = '';
     } else {
-      const curSeasonObj = seasons.find(s => s.is_current) || seasons[0];
-      if (curSeasonObj) {
-        currentSeason = curSeasonObj.season_id;
-        seasonSelect.value = currentSeason;
+      const prevVal = currentSeason || seasonSelect.value;
+      seasonSelect.innerHTML = seasons.map(s =>
+        `<option value="${s.season_id}">${s.season_name}</option>`
+      ).join('');
+
+      if (seasons.some(s => s.season_id === prevVal)) {
+        currentSeason = prevVal;
+        seasonSelect.value = prevVal;
+      } else {
+        const curSeasonObj = seasons.find(s => s.is_current) || seasons[0];
+        if (curSeasonObj) {
+          currentSeason = curSeasonObj.season_id;
+          seasonSelect.value = currentSeason;
+        }
       }
     }
   }
