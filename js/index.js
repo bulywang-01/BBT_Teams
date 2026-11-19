@@ -1219,26 +1219,62 @@ function updateTeamPlayerSelects() {
   }
 
   const faUserSelect = document.getElementById('faUserSelect');
+  const isSuperAdmin = Boolean(currentUser && currentUser.role === 'super_admin');
+  const selfUserId = String(currentUser?.user_id || '').trim();
+  const selfRosterObj = teamRoster.find(p => String(p.user_id).trim() === selfUserId)
+    || (globalData.roster || []).find(r => String(r.user_id).trim() === selfUserId)
+    || {};
+  const selfName = selfRosterObj.player_name || currentUser?.name || currentUser?.account || selfUserId || '目前登入球員';
+  const selfNumber = selfRosterObj.number ? `#${selfRosterObj.number} ` : '';
+  const selfPos = selfRosterObj.position ? ` (${selfRosterObj.position})` : '';
+
   if (faUserSelect) {
-    const alreadyFaUserIds = new Set();
-    globalData.transactions
-      .filter(tx => String(tx.tx_type).includes('FA'))
-      .forEach(tx => alreadyFaUserIds.add(String(tx.user_id)));
+    if (!isSuperAdmin && selfUserId) {
+      faUserSelect.innerHTML = `<option value="${selfUserId}" selected>${selfNumber}${selfName}${selfPos}</option>`;
+      faUserSelect.value = selfUserId;
+      faUserSelect.disabled = true;
+      const selectContainer = faUserSelect.closest('div');
+      if (selectContainer) {
+        selectContainer.classList.add('hidden');
+      }
+      const modalEl = document.getElementById('faApplyModal');
+      if (modalEl && !document.getElementById('faSelfPlayerBadge')) {
+        const badge = document.createElement('div');
+        badge.id = 'faSelfPlayerBadge';
+        badge.className = 'mb-3 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs';
+        badge.innerHTML = `
+          <span class="font-bold text-slate-500">宣告球員（本人）</span>
+          <span class="font-black text-emerald-900">${selfNumber}${selfName}${selfPos}</span>
+        `;
+        if (selectContainer && selectContainer.parentElement) {
+          selectContainer.parentElement.insertBefore(badge, selectContainer);
+        }
+      } else if (document.getElementById('faSelfPlayerBadge')) {
+        document.getElementById('faSelfPlayerBadge').innerHTML = `
+          <span class="font-bold text-slate-500">宣告球員（本人）</span>
+          <span class="font-black text-emerald-900">${selfNumber}${selfName}${selfPos}</span>
+        `;
+      }
+    } else {
+      const selectContainer = faUserSelect.closest('div');
+      if (selectContainer) selectContainer.classList.remove('hidden');
+      const existingBadge = document.getElementById('faSelfPlayerBadge');
+      if (existingBadge) existingBadge.remove();
 
-    let availableFaPlayers = teamRoster.filter(p => !alreadyFaUserIds.has(String(p.user_id)));
-    const isSuperAdmin = Boolean(currentUser && currentUser.role === 'super_admin');
+      const alreadyFaUserIds = new Set();
+      globalData.transactions
+        .filter(tx => String(tx.tx_type).includes('FA'))
+        .forEach(tx => alreadyFaUserIds.add(String(tx.user_id)));
 
-    if (!isSuperAdmin && currentUser && currentUser.user_id) {
-      availableFaPlayers = availableFaPlayers.filter(p => String(p.user_id) === String(currentUser.user_id));
+      const availableFaPlayers = teamRoster.filter(p => !alreadyFaUserIds.has(String(p.user_id)));
+      faUserSelect.disabled = false;
+      faUserSelect.innerHTML = availableFaPlayers.length > 0
+        ? availableFaPlayers.map(p => {
+            const displayName = p.number ? `#${p.number} ${p.player_name}` : p.player_name;
+            return `<option value="${p.user_id}">${displayName} (${p.position || '球員'})</option>`;
+          }).join('')
+        : `<option value="">目前無可宣告 FA 之球員 (已宣告或無符合名單)</option>`;
     }
-    faUserSelect.disabled = !isSuperAdmin && availableFaPlayers.length <= 1;
-
-    faUserSelect.innerHTML = availableFaPlayers.length > 0
-      ? availableFaPlayers.map(p => {
-          const displayName = p.number ? `#${p.number} ${p.player_name}` : p.player_name;
-          return `<option value="${p.user_id}">${displayName} (${p.position || '球員'})</option>`;
-        }).join('')
-      : `<option value="">${!isSuperAdmin ? '僅限本隊球員本人提出 FA 宣告' : '目前無可宣告 FA 之球員 (已宣告或無符合名單)'}</option>`;
   }
 }
 
@@ -2171,11 +2207,15 @@ function renderFaGuideBanner_(isSuperAdmin) {
     <div class="space-y-1.5 text-[11px] leading-relaxed text-slate-600">
       <div class="flex flex-wrap items-center gap-1">
         <span class="px-2 py-0.5 rounded bg-purple-100 text-purple-800 font-black whitespace-nowrap">已確定FA隊伍</span>
-        <span>知會原球隊 → 自行接洽新球隊 → 宣告 FA 資格 → 等待聯盟審核 → 申請成功</span>
+        <span>知會原球隊 → 自行接洽新球隊 →</span>
+        <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">宣告 FA 資格 (點我)</button>
+        <span>→ 等待聯盟審核 → 申請成功</span>
       </div>
       <div class="flex flex-wrap items-center gap-1">
         <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-black whitespace-nowrap">聯盟配對方式</span>
-        <span>知會原球隊 → 宣告 FA 資格 → 等待聯盟通知 → 待球員選擇隊伍 → 申請成功</span>
+        <span>知會原球隊 →</span>
+        <button type="button" onclick="openFaApplyModal()" class="underline font-black text-emerald-700 hover:text-emerald-800 whitespace-nowrap">宣告 FA 資格 (點我)</button>
+        <span>→ 等待聯盟通知 → 待球員選擇隊伍 → 申請成功</span>
       </div>
     </div>
   `;
@@ -2391,7 +2431,10 @@ async function submitAnnouncement() {
 }
 
 async function submitFaApply() {
-  const user_id = document.getElementById('faUserSelect').value;
+  const isSuper = Boolean(currentUser && currentUser.role === 'super_admin');
+  const user_id = (!isSuper && currentUser?.user_id)
+    ? String(currentUser.user_id).trim()
+    : document.getElementById('faUserSelect').value;
   const rawNote = document.getElementById('faNote').value.trim();
   const flowMode = document.getElementById('faFlowModeSelect')?.value || '已確定球隊';
 
