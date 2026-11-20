@@ -1,45 +1,3 @@
-// ============================================================================
-// BBT 軟式棒球聯盟 - 前端主控邏輯 (index.js)
-// 支援全聯盟分組總覽、手機緊湊版面、本隊/他隊已核准FA、FA審查與聯盟/本隊公告上下分區
-// ============================================================================
-
-let globalData = {
-  teams: [],
-  roster: [],
-  stats: [],
-  announcements: [],
-  league_announcements: [],
-  transactions: [],
-  attendance: [],
-  users: [],
-  history: [],
-  seasons: [],
-  team_season_history: []
-};
-
-window.globalData = globalData;
-
-let currentSelectedTeamId = '';
-window.currentSelectedTeamId = '';
-let currentDivision = 'ALL'; // 'ALL' 表示全聯盟（未選組別）
-window.currentDivision = 'ALL';
-let currentSeason = '2026-S18';
-let currentRosterFilter = 'all';
-let activePlayerCardCache = null;
-let activeCardUserId = '';
-let globalGameCache = {};
-let currentUser = null;
-let pendingReviewTxCache = null;
-
-const REMOTE_SCHEDULE_SHEET_ID = '1kgJti-vuALVDPhVWHdb0G5_Ows4Usp61Y00L9JMrrmw';
-const DIVISION_ORDER = ['大聯盟', '小聯盟', '育成組'];
-
-document.addEventListener('DOMContentLoaded', async () => {
-  attachActionFeedbackHooks_();
-  showActionStatus('系統初始化中...', 'loading', 0);
-  await initSystem();
-});
-
 async function initSystem() {
   const res = await BBTApi.getInitData(currentSeason, '');
   if (res && res.result === 'ok') {
@@ -54,7 +12,7 @@ async function initSystem() {
     globalData.history = res.history || [];
     globalData.seasons = res.seasons || [];
     globalData.team_season_history = res.team_season_history || [];
-    
+
     if (res.fa_window_config && typeof saveFaWindowConfig_ === 'function') {
       const mergedFaCfg = {
         ...(typeof getDefaultFaWindowConfig_ === 'function' ? getDefaultFaWindowConfig_() : {}),
@@ -126,7 +84,7 @@ async function initSystem() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-// --- 同步頂部組別按鈕樣式（防止手機換行） ---
+// --- 同步頂部組別按鈕樣式（白底膠囊色系，防止手機換行） ---
 function isPersonalOrTeamView_() {
   return Boolean(currentUser && currentUser.role !== 'super_admin');
 }
@@ -148,14 +106,28 @@ function getPreferredUserTeamId_() {
 
 function syncPersonalHeaderAndLayout_() {
   const isPersonalView = isPersonalOrTeamView_();
+  const isSuper = Boolean(currentUser && currentUser.role === 'super_admin');
 
-  // 1. 個人登入時精簡上方 Header 組別切換列，避免誤切全聯盟組別
+  // 1. 個人登入時隱藏組別切換列，避免誤切全聯盟組別
   const divGroup = document.getElementById('divisionSwitchGroup');
   if (divGroup) {
     divGroup.classList.toggle('hidden', isPersonalView);
   }
 
-  // 2. 個人登入時隱藏左側「聯盟球隊清單」側邊欄與「返回 KPI 總覽」按鈕
+  // 2. 頂部 Header 管理按鈕依權限顯示（含 FA 審查）
+  const btnFaReviewHeader = document.getElementById('btnOpenFaReview');
+  if (btnFaReviewHeader) {
+    btnFaReviewHeader.classList.toggle('hidden', !isSuper);
+  }
+  const headerAdminRow = document.getElementById('headerAdminRow');
+  if (headerAdminRow) {
+    const hasAnyAdminBtn = Array.from(headerAdminRow.querySelectorAll('button')).some(
+      btn => !btn.classList.contains('hidden')
+    );
+    headerAdminRow.classList.toggle('hidden', !hasAnyAdminBtn);
+  }
+
+  // 3. 個人登入時隱藏左側「聯盟球隊清單」側邊欄與「返回 KPI 總覽」按鈕
   const leftSidebar = document.getElementById('leftTeamSidebar');
   const mainGrid = leftSidebar ? leftSidebar.parentElement : null;
   if (leftSidebar) {
@@ -205,9 +177,9 @@ function syncDivisionButtonsUI() {
     const btn = document.getElementById(btnId);
     if (!btn) return;
     if (divKey === currentDivision) {
-      btn.className = 'px-3 py-1 rounded-lg text-xs font-black bg-bbt-navy text-white shadow-sm transition whitespace-nowrap shrink-0';
+      btn.className = 'bbt-light-pill bbt-light-pill-active whitespace-nowrap shrink-0';
     } else {
-      btn.className = 'px-3 py-1 rounded-lg text-xs font-bold text-slate-300 hover:bg-slate-700/80 transition whitespace-nowrap shrink-0';
+      btn.className = 'bbt-light-pill whitespace-nowrap shrink-0';
     }
   });
   syncPersonalHeaderAndLayout_();
@@ -576,6 +548,11 @@ function closeLeagueFaCenterModal() {
   modal.classList.remove('flex');
 }
 
+// 頂部 Header「FA 審查」按鈕入口：無參數時自動開啟聯盟 FA 審查中心（若有單筆待審可於清單核准/駁回）
+function openHeaderFaReviewModal() {
+  openLeagueFaCenterModal();
+}
+
 function applyFaWindowDraftChange_() {
   const enabledEl = document.getElementById('faWindowEnabledInput');
   const startEl = document.getElementById('faWindowStartInput');
@@ -739,6 +716,15 @@ function renderOverviewKpiBoard() {
   document.getElementById('kpiTxHistoryCount').innerText = historyTotal;
   document.getElementById('kpiPendingTxSub').innerText = `待審核 ${pendingTxCount} 筆`;
 
+  // 更新頂部 Header「FA 審查」按鈕待審件數提示
+  const btnFaReviewHeader = document.getElementById('btnOpenFaReview');
+  if (btnFaReviewHeader) {
+    const labelSpan = btnFaReviewHeader.querySelector('span');
+    if (labelSpan) {
+      labelSpan.innerText = pendingTxCount > 0 ? `FA 審查 (${pendingTxCount})` : 'FA 審查';
+    }
+  }
+
   const seasonPrefix = String(currentSeason || '').split('-')[0] || String(new Date().getFullYear());
   const scopedFaTxs = scopedTxs.filter(tx => {
     if (!isFaRecord_(tx)) return false;
@@ -787,51 +773,20 @@ function renderOverviewKpiBoard() {
     `;
   }
 
+  // 右側 KPI 區塊操作列：僅保留「+ 新增球隊」，不再重複放置「球季管理」與「FA 審查」
   const btnKpiCreate = document.getElementById('btnKpiCreateTeam');
   if (btnKpiCreate) {
     btnKpiCreate.classList.toggle('hidden', !isSuper);
     const actionBar = btnKpiCreate.parentElement;
     if (actionBar) {
+      const dupSeasonBtn = document.getElementById('btnKpiSeasonMgr');
+      const dupFaBtn = document.getElementById('btnKpiFaReview');
+      if (dupSeasonBtn) dupSeasonBtn.remove();
+      if (dupFaBtn) dupFaBtn.remove();
+
       actionBar.classList.add('flex-wrap', 'gap-1.5');
-      btnKpiCreate.className = 'bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] sm:text-xs font-black px-2.5 sm:px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1 whitespace-nowrap shrink-0';
+      btnKpiCreate.className = `${isSuper ? '' : 'hidden '}bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1 whitespace-nowrap shrink-0`;
       btnKpiCreate.innerHTML = `<span>+ 新增球隊</span>`;
-
-      let faBtn = document.getElementById('btnKpiFaReview');
-      if (!faBtn) {
-        faBtn = document.createElement('button');
-        faBtn.id = 'btnKpiFaReview';
-        faBtn.type = 'button';
-        faBtn.onclick = openLeagueFaCenterModal;
-        actionBar.insertBefore(faBtn, btnKpiCreate);
-      }
-      faBtn.className = `${isSuper ? '' : 'hidden '}bg-purple-600 hover:bg-purple-700 text-white text-[11px] sm:text-xs font-black px-2.5 sm:px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1 whitespace-nowrap shrink-0`;
-      faBtn.innerHTML = `
-        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-        <span>FA 審查${pendingTxCount > 0 ? ` (${pendingTxCount})` : ''}</span>
-      `;
-
-      let seasonBtn = document.getElementById('btnKpiSeasonMgr');
-      if (!seasonBtn && typeof openSeasonManagerModal === 'function') {
-        seasonBtn = document.createElement('button');
-        seasonBtn.id = 'btnKpiSeasonMgr';
-        seasonBtn.type = 'button';
-        seasonBtn.onclick = openSeasonManagerModal;
-        actionBar.insertBefore(seasonBtn, faBtn);
-      }
-      if (seasonBtn) {
-        seasonBtn.className = `${isSuper ? '' : 'hidden '}bg-slate-800 hover:bg-slate-900 text-white text-[11px] sm:text-xs font-black px-2.5 sm:px-3 py-1.5 rounded-lg shadow-sm transition flex items-center gap-1 whitespace-nowrap shrink-0`;
-        seasonBtn.innerHTML = `
-          <i data-lucide="calendar-range" class="w-3.5 h-3.5 text-emerald-400"></i>
-          <span>球季管理</span>
-        `;
-      }
-
-      Array.from(actionBar.children).forEach(child => {
-        if (child.tagName === 'BUTTON' || child.tagName === 'A') {
-          child.classList.remove('px-3.5', 'py-2', 'rounded-xl');
-          child.classList.add('px-2.5', 'sm:px-3', 'py-1.5', 'rounded-lg', 'text-[11px]', 'sm:text-xs');
-        }
-      });
     }
   }
 
@@ -1385,7 +1340,10 @@ function selectTeam(teamId) {
   syncPersonalHeaderAndLayout_();
   renderRosterTable();
   renderAnnouncements();
-  renderTransactions(); // <-- 換隊時立刻更新本隊與他隊已核准 FA
+  renderTransactions();
+  if (typeof renderTeamSeasonHistoryTab === 'function') {
+    renderTeamSeasonHistoryTab();
+  }
   loadRemoteScheduleOptions();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1959,7 +1917,6 @@ function resolveApprovedFaTargetTeamName_(tx) {
 
   const noteStr = String(tx.note || '').trim();
   if (noteStr) {
-    // 優先抓取【...】後的隊伍名稱，或比對現有球隊名稱
     const afterBracketMatch = noteStr.match(/】\s*([^\s（(]+)$/);
     if (afterBracketMatch && afterBracketMatch[1]) {
       const candidate = afterBracketMatch[1].trim();
@@ -2002,7 +1959,6 @@ function renderRosterTable() {
 
   const allTeamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
 
-  // FA 審核通過者視為該隊歷屆球員，不列入現役名單；若狀態本身已是 fa 且已核准亦排除
   const activeRoster = allTeamRoster.filter(r => {
     const rawStatus = String(r.status || '').trim().toLowerCase();
     const faInfo = getApprovedFaForRosterRow_(r);
@@ -2089,7 +2045,6 @@ function formatHistoryDateTime_(rawDate, rawTime = '') {
 
   const extractDateOnly_ = (s) => {
     if (!s) return '';
-    // 若是帶時區的 ISO 日期字串，依台灣時區萃取 YYYY/MM/DD
     if (/^\d{4}-\d{2}-\d{2}T.*(Z|[+\-]\d{2}:?\d{2})$/i.test(s)) {
       const dt = new Date(s);
       if (!isNaN(dt.getTime())) {
@@ -2105,7 +2060,6 @@ function formatHistoryDateTime_(rawDate, rawTime = '') {
         if (y && m && d) return `${y}/${m}/${d}`;
       }
     }
-    // 擷取一般日期格式 YYYY/MM/DD 或 YYYY-MM-DD
     const m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
     if (m) {
       return `${m[1]}/${String(m[2]).padStart(2, '0')}/${String(m[3]).padStart(2, '0')}`;
@@ -2492,6 +2446,12 @@ function openFaReviewModal(txId, defaultDecision = 'approved') {
     return;
   }
 
+  // 若未傳入 txId（例如從頂部 Header 點擊「FA 審查」），自動開啟聯盟 FA 審查中心視窗
+  if (!txId) {
+    openLeagueFaCenterModal();
+    return;
+  }
+
   const tx = (globalData.transactions || []).find(t => String(t.tx_id || '').trim() === String(txId || '').trim());
   if (!tx) {
     alert('找不到該筆 FA 申請紀錄');
@@ -2594,6 +2554,9 @@ async function submitFaReviewDecision() {
       await initSystem();
       if (currentSelectedTeamId) {
         selectTeam(currentSelectedTeamId);
+      }
+      if (document.getElementById('leagueFaCenterModal') && !document.getElementById('leagueFaCenterModal').classList.contains('hidden')) {
+        refreshLeagueFaCenterContent_();
       }
     } else {
       alert('❌ 審查失敗: ' + (res && res.message ? res.message : '未知錯誤'));
@@ -2723,7 +2686,7 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
-  // 2. 檢查是否於去年（prevYear）已預支「今年（currentYear）」額度 -> 今年額度已用完，今年可提出 0 次（除非再預支明年額度，但每年總上限含預支為 1 次今年額度 + 1 次預支額度）
+  // 2. 檢查是否於去年（prevYear）已預支「今年（currentYear）」額度
   const prevYearTxs = playerFaTxs.filter(tx => getTxYear_(tx) === prevYear);
   const borrowedCurrentYearFromPrevYear = prevYearTxs.some(tx => hasBorrowedNextYearQuota_(tx));
 
@@ -2732,7 +2695,6 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
   const currentYearCount = thisYearTxs.length;
   const borrowedNextYearInThisYear = thisYearTxs.some(tx => hasBorrowedNextYearQuota_(tx));
 
-  // 情況 A：今年尚未提出 FA，且去年未預支今年額度 -> 可使用今年額度（1 次）
   if (currentYearCount === 0 && !borrowedCurrentYearFromPrevYear) {
     return {
       canApply: true,
@@ -2745,7 +2707,6 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
-  // 情況 B：今年尚未提出 FA，但去年已預支今年額度 -> 今年一般額度已用掉，但仍可預支明年（nextYear）額度於今年再提 1 次（提出後明年 nextYear 不能提 FA）
   if (currentYearCount === 0 && borrowedCurrentYearFromPrevYear) {
     return {
       canApply: true,
@@ -2758,7 +2719,6 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
-  // 情況 C：今年已提出 1 次且尚未預支明年額度 -> 可使用今年/明年額度於今年再提第 2 次（若本次預支明年額度，明年 nextYear 不能提 FA）
   if (currentYearCount === 1 && !borrowedNextYearInThisYear) {
     return {
       canApply: true,
@@ -2771,7 +2731,6 @@ function getPlayerFaEligibility_(userId, refDate = new Date()) {
     };
   }
 
-  // 情況 D：今年已提出 >= 2 次，或今年已預支明年額度 -> 今年額度已用罄，且明年額度已被使用
   const reasonText = borrowedNextYearInThisYear
     ? `${currentYear} 年度額度及 ${nextYear} 年度預支額度皆已使用（${nextYear} 年不能再提 FA）`
     : `${currentYear} 年度 FA 額度已達上限`;
@@ -2905,19 +2864,16 @@ function renderTransactions() {
 
   renderFaGuideBanner_(isSuper);
 
-  // 非聯盟總管理員時，僅球員本人可提出 FA（球隊端僅顯示提出名單與狀態，不提供球隊自行審核）
   const btnFaApply = document.querySelector('button[onclick="openFaApplyModal()"]');
   if (btnFaApply) {
     const isPlayerSelf = Boolean(currentUser && currentUser.role === 'player');
     btnFaApply.classList.toggle('hidden', !isSuper && !isPlayerSelf);
   }
 
-  // 1. 本隊提出／相關 FA 名單（球隊頁面僅顯示有誰提出與審核狀態，非聯盟管理員不顯示核准/駁回操作）
   const myTeamFaList = allTxs.filter(
     tx => isFaRecord_(tx) && isMyTeamTx_(tx, currentTeam)
   );
 
-  // 2. 他隊已審核通過 FA
   const otherApprovedFaList = allTxs.filter(
     tx => isFaRecord_(tx) && !isMyTeamTx_(tx, currentTeam) && isApprovedStatus_(tx.admin_status)
   );
@@ -2930,7 +2886,6 @@ function renderTransactions() {
       ? 'bg-emerald-100 text-emerald-800'
       : (pending ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800');
 
-    // 僅聯盟總管理員（super_admin）可進行 FA 審核
     const reviewActionsHtml = (allowLeagueReview && pending && tx.tx_id)
       ? `
         <div class="mt-1.5 flex items-center justify-end gap-1">
@@ -3248,15 +3203,17 @@ function renderSeasonDropdowns_() {
   const seasons = getNormalizedSeasonsList_();
   const isSuper = Boolean(currentUser && currentUser.role === 'super_admin');
 
-  // 1. 頂部球季管理按鈕權限顯示
+  // 1. 頂部球季管理按鈕與 FA 審查按鈕權限顯示
   const btnSeasonMgr = document.getElementById('btnOpenSeasonManager');
   if (btnSeasonMgr) {
     btnSeasonMgr.classList.toggle('hidden', !isSuper);
-    if (isSuper) btnSeasonMgr.classList.add('flex');
+  }
+  const btnFaReview = document.getElementById('btnOpenFaReview');
+  if (btnFaReview) {
+    btnFaReview.classList.toggle('hidden', !isSuper);
   }
 
-
-  // 2. 頂部 Header 球季選單（允許多個球季並行，不顯示單一「現行賽季」標示）
+  // 2. 球季選單（允許多個球季並行，不顯示單一「現行賽季」標示）
   const seasonSelect = document.getElementById('seasonSelect');
   if (seasonSelect) {
     if (!Array.isArray(seasons) || seasons.length === 0) {
@@ -3787,7 +3744,6 @@ function renderTeamSeasonHistoryTab() {
   );
   const canEdit = isSuper || isTeamAdmin;
 
-  // 更新球隊標頭「加入球季」徽章與設定按鈕
   const joinedBadge = document.getElementById('teamJoinedSeasonBadge');
   if (joinedBadge && team) {
     const jSeason = team.joined_season || team.season || '—';
@@ -3806,7 +3762,6 @@ function renderTeamSeasonHistoryTab() {
     h => String(h.team_id) === String(currentSelectedTeamId)
   );
 
-  // 若尚無歷史紀錄，至少顯示現行球季預設列
   const rows = rawHist.length > 0
     ? rawHist
     : (team ? [{
@@ -3831,7 +3786,6 @@ function renderTeamSeasonHistoryTab() {
     const hasRecord = r.wins !== '' && r.wins !== undefined && r.wins !== null;
     const wltText = hasRecord ? `${r.wins}W - ${r.losses || 0}L - ${r.ties || 0}T` : '—';
 
-    // 計算該季登錄人數
     const seasonRosterCount = (globalData.roster || []).filter(p =>
       String(p.team_id) === String(currentSelectedTeamId) &&
       (!p.season || String(p.season) === String(r.season))
