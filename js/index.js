@@ -3221,20 +3221,80 @@ function openFaApplyModal() {
 }
 function closeFaApplyModal() { document.getElementById('faApplyModal').classList.add('hidden'); document.getElementById('faApplyModal').classList.remove('flex'); }
 
-async function saveCurrentTeamProfile() {
-  const intro = document.getElementById('editTeamIntro').value;
-  const contact = document.getElementById('editTeamContact').value;
-  const phone = document.getElementById('editTeamPhone').value;
+function getActiveAuthToken_() {
+  const candidates = [
+    window.authToken,
+    window.currentToken,
+    window.currentUser && window.currentUser.token,
+    sessionStorage.getItem('bbt_auth_token'),
+    sessionStorage.getItem('token'),
+    localStorage.getItem('bbt_auth_token'),
+    localStorage.getItem('token')
+  ];
+  for (const val of candidates) {
+    if (typeof val === 'string' && val.trim()) {
+      return val.trim();
+    }
+  }
+  return '';
+}
 
-  const res = await BBTApi.saveTeamProfile({ team_id: currentSelectedTeamId, intro, contact_name: contact, contact_phone: phone });
+window.saveCurrentTeamProfile = async function () {
+  const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
+  if (!tid) return;
+
+  const token = getActiveAuthToken_();
+  if (!token) {
+    alert('⚠️ 尚未取得登入憑證，請先重新登入後再儲存');
+    return;
+  }
+
+  const intro = document.getElementById('editTeamIntro')?.value ?? '';
+  const contact = document.getElementById('editTeamContact')?.value ?? '';
+  const phone = document.getElementById('editTeamPhone')?.value ?? '';
+  const logoPath = document.getElementById('editTeamLogoPath')?.value || `/img/${tid}.png`;
+
+  if (pendingLogoUploadData_ && typeof callApi === 'function') {
+    try {
+      await callApi('uploadTeamLogo', {
+        token,
+        team_id: tid,
+        upload_dir: '/img',
+        file_name: pendingLogoUploadData_.fileName,
+        target_path: pendingLogoUploadData_.targetPath,
+        mime_type: pendingLogoUploadData_.mimeType,
+        base64: pendingLogoUploadData_.base64
+      });
+    } catch (e) {
+      // 若後端尚未實作 uploadTeamLogo，仍繼續儲存簡介與路徑設定
+    }
+  }
+
+  const res = await BBTApi.saveTeamProfile({
+    token,
+    team_id: tid,
+    intro,
+    contact_name: contact,
+    contact_phone: phone,
+    logo_url: logoPath,
+    logo_path: logoPath
+  });
+
   if (res && res.result === 'ok') {
-    alert('✅ 球隊資料已成功同步至 Google Sheets！');
-    closeTeamProfileModal();
-    initSystem();
+    const teamObj = (window.globalData?.teams || []).find(t => String(t.team_id) === tid);
+    if (teamObj) {
+      teamObj.intro = intro;
+      teamObj.contact_name = contact;
+      teamObj.contact_phone = phone;
+      teamObj.logo_url = logoPath;
+    }
+    alert('✅ 球隊簡介與隊徽設定已儲存！');
+    if (typeof closeTeamProfileModal === 'function') closeTeamProfileModal();
+    if (typeof initSystem === 'function') await initSystem();
   } else {
     alert('❌ 儲存失敗: ' + (res && res.message ? res.message : ''));
   }
-}
+};
 
 async function submitAnnouncement() {
   const category = document.getElementById('annCategory').value;
