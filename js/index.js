@@ -5142,3 +5142,43 @@ window.saveCurrentTeamProfile = async function () {
     return `<span class="inline-flex items-center justify-center ${sizeClass} rounded-xl bg-emerald-600 text-white font-black shrink-0">${fallbackText}</span>`;
   };
 })();
+
+(function syncRightTeamDetailLogo_() {
+  const originalSelectTeam = window.selectTeam || window.renderTeamDetail || window.renderSelectedTeam;
+
+  function refreshRightPanelLogo_(teamObj) {
+    const t = teamObj || (window.globalData?.teams || []).find(
+      item => String(item.team_id) === String(window.currentSelectedTeamId || '')
+    );
+    if (!t || typeof window.buildTeamLogoHtml !== 'function') return;
+
+    // 尋找右側「暗殺者」標題旁原本放隊徽的容器（優先找含單字或圖片的徽章區塊）
+    const detailContainer =
+      document.getElementById('teamDetailLogo') ||
+      document.querySelector('[data-team-detail-logo]') ||
+      document.querySelector('.team-detail-header .w-16, .team-detail-header .w-14, .team-detail-header .w-12');
+
+    if (detailContainer) {
+      detailContainer.outerHTML = window.buildTeamLogoHtml(t, 'w-16 h-16 text-xl');
+    }
+  }
+
+  // 監聽 initSystem / 切換球隊後，同步刷新右側隊徽
+  const prevInitSystem = window.initSystem;
+  if (typeof prevInitSystem === 'function') {
+    window.initSystem = async function (...args) {
+      const res = await prevInitSystem.apply(this, args);
+      refreshRightPanelLogo_();
+      return res;
+    };
+  }
+
+  if (typeof originalSelectTeam === 'function') {
+    const fnName = window.selectTeam ? 'selectTeam' : (window.renderTeamDetail ? 'renderTeamDetail' : 'renderSelectedTeam');
+    window[fnName] = function (...args) {
+      const res = originalSelectTeam.apply(this, args);
+      refreshRightPanelLogo_();
+      return res;
+    };
+  }
+})();
