@@ -4992,3 +4992,153 @@ window.saveCurrentTeamProfile = async function () {
     document.addEventListener('DOMContentLoaded', injectBatchTriggerButtons_, { once: true });
   }
 })();
+
+(function fixTeamLogoUploadAndRender_() {
+  function getActiveAuthToken_() {
+    const keys = ['bbt_auth_token', 'token'];
+    for (const k of keys) {
+      const s = sessionStorage.getItem(k);
+      if (s && s.trim()) return s.trim();
+      const l = localStorage.getItem(k);
+      if (l && l.trim()) return l.trim();
+    }
+    return (
+      window.authToken ||
+      window.currentToken ||
+      (window.currentUser && window.currentUser.token) ||
+      ''
+    ).toString().trim();
+  }
+
+  let pendingLogoUploadData_ = null;
+
+  window.handleTeamLogoFileChange_ = function (evt) {
+    const file = evt?.target?.files?.[0];
+    const teamId = String(window.currentSelectedTeamId || currentSelectedTeamId || 'team').trim();
+    if (!file) {
+      pendingLogoUploadData_ = null;
+      return;
+    }
+
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+    const fileName = `${teamId}.${ext}`;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const dataUrl = String(e.target?.result || '');
+      const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
+      pendingLogoUploadData_ = {
+        fileName,
+        mimeType: file.type || 'image/png',
+        base64,
+        dataUrl
+      };
+
+      const previewEl = document.getElementById('editTeamLogoPreview');
+      if (previewEl && dataUrl) {
+        previewEl.src = dataUrl;
+        previewEl.classList.remove('hidden');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  window.saveCurrentTeamProfile = async function () {
+    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
+    if (!tid) return;
+
+    const token = getActiveAuthToken_();
+    if (!token) {
+      alert('⚠️ 尚未取得登入憑證，請先重新登入後再儲存');
+      return;
+    }
+
+    const fileInput = document.getElementById('editTeamLogoFile');
+    if (fileInput && fileInput.files && fileInput.files[0] && !pendingLogoUploadData_) {
+      alert('⏳ 圖片仍在讀取中，請稍等 1 秒再按儲存');
+      return;
+    }
+
+    const intro = document.getElementById('editTeamIntro')?.value ?? '';
+    const contact = document.getElementById('editTeamContact')?.value ?? '';
+    const phone = document.getElementById('editTeamPhone')?.value ?? '';
+
+    const existingTeam = (window.globalData?.teams || []).find(t => String(t.team_id) === tid) || {};
+    let finalLogoUrl = String(existingTeam.logo_url || '').trim();
+    if (finalLogoUrl && !/^https?:\/\//i.test(finalLogoUrl) && !finalLogoUrl.startsWith('data:')) {
+      finalLogoUrl = '';
+    }
+
+    if (pendingLogoUploadData_ && pendingLogoUploadData_.base64) {
+      if (typeof callApi !== 'function') {
+        alert('❌ 找不到 callApi 函式，無法上傳至 Google Drive');
+        return;
+      }
+
+      const uploadRes = await callApi('uploadTeamLogo', {
+        token,
+        team_id: tid,
+        file_name: pendingLogoUploadData_.fileName,
+        mime_type: pendingLogoUploadData_.mimeType,
+        base64: pendingLogoUploadData_.base64
+      });
+
+      console.log('[uploadTeamLogo response]', uploadRes);
+
+      if (!uploadRes || uploadRes.result !== 'ok' || !uploadRes.logo_url) {
+        alert('❌ 隊徽上傳到 Google Drive 失敗：' + (uploadRes?.message || '未回傳有效 logo_url'));
+        return;
+      }
+      finalLogoUrl = String(uploadRes.logo_url).trim();
+    }
+
+    const res = await BBTApi.saveTeamProfile({
+      token,
+      team_id: tid,
+      intro,
+      contact_name: contact,
+      contact_phone: phone,
+      logo_url: finalLogoUrl,
+      logo_path: finalLogoUrl
+    });
+
+    if (res && res.result === 'ok') {
+      pendingLogoUploadData_ = null;
+      if (fileInput) fileInput.value = '';
+      if (existingTeam) {
+        existingTeam.intro = intro;
+        existingTeam.contact_name = contact;
+        existingTeam.contact_phone = phone;
+        existingTeam.logo_url = finalLogoUrl;
+      }
+      alert('✅ 球隊簡介與隊徽已儲存！');
+      if (typeof window.closeTeamProfileModal === 'function') window.closeTeamProfileModal();
+      if (typeof initSystem === 'function') await initSystem();
+    } else {
+      alert('❌ 儲存失敗: ' + (res?.message || ''));
+    }
+  };
+
+  window.buildTeamLogoHtml = function (team, sizeClass = 'w-10 h-10 text-sm') {
+    const t = team || {};
+    const rawUrl = String(t.logo_url || '').trim();
+    const fallbackText = String(t.team_name || t.team_id || '?').trim().slice(0, 1) || '?';
+    const isValidImgUrl = /^https?:\/\//i.test(rawUrl) || rawUrl.startsWith('data:image/') || rawUrl.startsWith('img/');
+
+    if (isValidImgUrl) {
+      return `
+        <span class="relative inline-flex items-center justify-center ${sizeClass} rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+          <img
+            src="${rawUrl}"
+            alt="${String(t.team_name || '隊徽')}"
+            class="w-full h-full object-cover"
+            onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
+          />
+          <span class="hidden w-full h-full items-center justify-center bg-emerald-600 text-white font-black">${fallbackText}</span>
+        </span>
+      `;
+    }
+
+    return `<span class="inline-flex items-center justify-center ${sizeClass} rounded-xl bg-emerald-600 text-white font-black shrink-0">${fallbackText}</span>`;
+  };
+})();
