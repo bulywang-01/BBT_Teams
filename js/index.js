@@ -4807,3 +4807,33 @@ function compactToolbarAndOverviewLayout_() {
     document.addEventListener('DOMContentLoaded', injectBatchTriggerButtons_, { once: true });
   }
 })();
+
+(function patchTeamLogoRenderer_() {
+  const origBuildLogo = window.buildTeamLogoHtml;
+
+  window.buildTeamLogoHtml = function (team, sizeClass = 'w-10 h-10 text-sm') {
+    const t = team || {};
+    const rawUrl = String(t.logo_url || t.logo_path || '').trim();
+    const normalizedUrl = rawUrl.startsWith('/img/') ? rawUrl.slice(1) : rawUrl;
+    const fallbackText = String(t.team_name || t.team_id || '?').trim().slice(0, 1) || '?';
+
+    if (normalizedUrl) {
+      return `
+        <span class="relative inline-flex items-center justify-center ${sizeClass} rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+          <img
+            src="${normalizedUrl}"
+            alt="${String(t.team_name || '隊徽')}"
+            class="w-full h-full object-cover"
+            onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
+          />
+          <span class="hidden w-full h-full items-center justify-center bg-emerald-600 text-white font-black">${fallbackText}</span>
+        </span>
+      `;
+    }
+
+    if (typeof origBuildLogo === 'function') {
+      return origBuildLogo(team, sizeClass);
+    }
+    return `<span class="inline-flex items-center justify-center ${sizeClass} rounded-xl bg-emerald-600 text-white font-black shrink-0">${fallbackText}</span>`;
+  };
+})();
