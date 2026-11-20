@@ -1,4 +1,8 @@
 async function initSystem() {
+  if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setLoading === 'function') {
+    BBTGateView.setLoading(true, '正在同步聯盟與球隊資料...', '驗證登入狀態與載入資料中');
+  }
+
   const res = await BBTApi.getInitData(currentSeason, '');
   if (res && res.result === 'ok') {
     globalData.teams = res.teams || [];
@@ -41,7 +45,10 @@ async function initSystem() {
       if (kpiSection) kpiSection.classList.add('hidden');
       if (selectedSection) selectedSection.classList.add('hidden');
       if (leftSidebar) leftSidebar.classList.add('hidden');
-      if (typeof BBTAuth !== 'undefined' && typeof BBTAuth.openLoginModal === 'function') {
+
+      if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setAuthenticated === 'function') {
+        BBTGateView.setAuthenticated(false);
+      } else if (typeof BBTAuth !== 'undefined' && typeof BBTAuth.openLoginModal === 'function') {
         BBTAuth.openLoginModal();
       }
       if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -77,7 +84,14 @@ async function initSystem() {
       renderAnnouncements();
     }
     renderTransactions();
+
+    if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setAuthenticated === 'function') {
+      BBTGateView.setAuthenticated(true);
+    }
   } else {
+    if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setLoading === 'function') {
+      BBTGateView.setLoading(false);
+    }
     renderOverviewKpiBoard();
     alert('無法連線至 Google Sheets 資料庫，請檢查 API 網址或部署權限。');
   }
