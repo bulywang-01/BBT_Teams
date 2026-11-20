@@ -4248,9 +4248,10 @@ function compactToolbarAndOverviewLayout_() {
   // --- 2. 球隊簡介維護與隊徽設定（GitHub img/ 目錄對應） ---
   function renameTeamIntroButton_() {
     document.querySelectorAll('button').forEach(btn => {
-      const txt = String(btn.textContent || '').trim();
-      if (txt.includes('隊服與介紹維護')) {
-        btn.innerHTML = `<i data-lucide="file-text" class="w-3.5 h-3.5"></i><span>球隊簡介維護</span>`;
+      const txt = String(btn.textContent || '').replace(/\s+/g, '').trim();
+      if (txt.includes('隊服與介紹維護') || txt.includes('球隊簡介維護')) {
+        btn.classList.add('whitespace-nowrap', 'inline-flex', 'items-center', 'gap-1.5', 'shrink-0');
+        btn.innerHTML = `<i data-lucide="file-text" class="w-3.5 h-3.5 shrink-0"></i><span>球隊簡介維護</span>`;
       }
     });
   }
