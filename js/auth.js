@@ -7,6 +7,24 @@ const BBTAuth = {
   ROLE_OVERRIDE_KEY: 'bbt_role_overrides',
   CUSTOM_PWD_KEY: 'bbt_custom_passwords',
 
+  _setGateLoading(isLoading, loadingText, loadingSub) {
+    if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setLoading === 'function') {
+      BBTGateView.setLoading(isLoading, loadingText, loadingSub);
+    }
+  },
+
+  _setGateAuthenticated(isAuthenticated) {
+    if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setAuthenticated === 'function') {
+      BBTGateView.setAuthenticated(isAuthenticated);
+    }
+  },
+
+  _syncGateView(opts = {}) {
+    if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.sync === 'function') {
+      BBTGateView.sync(opts);
+    }
+  },
+
   getCurrentUser() {
     if (window.currentUser) return window.currentUser;
     try {
@@ -175,10 +193,13 @@ const BBTAuth = {
     const user = this.getCurrentUser();
     if (user) {
       if (confirm(`確定要登出目前帳號 (${user.name}) 嗎？`)) {
+        this._setGateLoading(true, '正在登出系統...', '清除登入狀態中');
         await this.clearSession(true);
+        this._setGateAuthenticated(false);
         location.reload();
       }
     } else {
+      this._setGateAuthenticated(false);
       this.openLoginModal();
     }
   },
@@ -205,8 +226,11 @@ const BBTAuth = {
           const normalized = this.normalizeBackendUser(apiRes.user, rosterList, teamsList, usersList);
           this.setSession(normalized, apiRes.token || '');
           this.closeLoginModal();
+          this._setGateLoading(true, '登入成功，正在載入系統資料...', '請稍候');
           if (typeof initSystem === 'function') {
             await initSystem();
+          } else {
+            this._setGateAuthenticated(true);
           }
           return;
         }
@@ -273,8 +297,11 @@ const BBTAuth = {
       });
 
       this.closeLoginModal();
+      this._setGateLoading(true, '登入成功，正在載入系統資料...', '請稍候');
       if (typeof initSystem === 'function') {
         await initSystem();
+      } else {
+        this._setGateAuthenticated(true);
       }
     } catch (err) {
       errBox.innerText = err.message || '登入失敗，請稍後再試';
@@ -287,7 +314,12 @@ const BBTAuth = {
 
   applyRolePermissions() {
     const user = this.getCurrentUser();
-    if (!user) return;
+    if (!user) {
+      this._setGateAuthenticated(false);
+      return;
+    }
+
+    this._syncGateView({ isLoading: false, isAuthenticated: true });
 
     const usersList = (window.globalData && window.globalData.users) || [];
     const rosterList = (window.globalData && window.globalData.roster) || [];
