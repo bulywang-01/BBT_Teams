@@ -39,103 +39,189 @@ window.currentUser = currentUser;
 window.globalGameCache = globalGameCache;
 window.globalData = globalData;
 
+const INIT_CACHE_KEY = 'bbt_init_data_cache_v1';
+
+function readInitCache_() {
+  try {
+    const raw = localStorage.getItem(INIT_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeInitCache_(payload) {
+  try {
+    localStorage.setItem(INIT_CACHE_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      data: payload
+    }));
+  } catch (e) {
+    // 忽略儲存空間限制
+  }
+}
+
+function applyInitPayload_(res) {
+  globalData.teams = res.teams || [];
+  globalData.roster = res.roster || [];
+  globalData.stats = res.stats || [];
+  globalData.announcements = res.announcements || [];
+  globalData.league_announcements = res.league_announcements || [];
+  globalData.transactions = res.transactions || [];
+  globalData.attendance = res.attendance || [];
+  globalData.users = res.users || [];
+  globalData.history = res.history || [];
+  globalData.seasons = res.seasons || [];
+  globalData.team_season_history = res.team_season_history || [];
+
+  if (res.fa_window_config && typeof saveFaWindowConfig_ === 'function') {
+    const mergedFaCfg = {
+      ...(typeof getDefaultFaWindowConfig_ === 'function' ? getDefaultFaWindowConfig_() : {}),
+      ...res.fa_window_config,
+      enabled: res.fa_window_config.enabled !== undefined ? Boolean(res.fa_window_config.enabled) : true
+    };
+    saveFaWindowConfig_(mergedFaCfg);
+    if (typeof syncFaWindowUiImmediately_ === 'function') {
+      syncFaWindowUiImmediately_(mergedFaCfg);
+    }
+  }
+  window.globalData = globalData;
+}
+
+function showUnauthenticatedGate_() {
+  const nameEl = document.getElementById('userNameDisplay');
+  const titleEl = document.getElementById('userTitleDisplay');
+  if (nameEl) nameEl.innerText = '未登入';
+  if (titleEl) titleEl.innerText = '請先登入系統';
+
+  const kpiSection = document.getElementById('unselectedKpiSection');
+  const selectedSection = document.getElementById('selectedTeamSection');
+  const leftSidebar = document.getElementById('leftTeamSidebar');
+  if (kpiSection) kpiSection.classList.add('hidden');
+  if (selectedSection) selectedSection.classList.add('hidden');
+  if (leftSidebar) leftSidebar.classList.add('hidden');
+
+  if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setAuthenticated === 'function') {
+    BBTGateView.setAuthenticated(false);
+  } else if (typeof BBTAuth !== 'undefined' && typeof BBTAuth.openLoginModal === 'function') {
+    BBTAuth.openLoginModal();
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+async function renderAuthenticatedWorkspace_(isBackgroundRefresh = false) {
+  if (typeof BBTAuth !== 'undefined' && typeof BBTAuth.applyRolePermissions === 'function') {
+    BBTAuth.applyRolePermissions();
+  }
+  currentUser = typeof BBTAuth !== 'undefined' && typeof BBTAuth.getCurrentUser === 'function'
+    ? BBTAuth.getCurrentUser()
+    : currentUser;
+
+  if (!currentUser) {
+    showUnauthenticatedGate_();
+    return;
+  }
+
+  if (typeof renderSeasonDropdowns_ === 'function') {
+    renderSeasonDropdowns_();
+  }
+  syncDivisionButtonsUI();
+  if (isPersonalOrTeamView_()) {
+    const ownTeamId = getPreferredUserTeamId_();
+    if (ownTeamId) {
+      selectTeam(ownTeamId);
+    } else {
+      renderTeamSidebar('');
+      renderOverviewKpiBoard();
+    }
+  } else {
+    renderTeamSidebar(document.getElementById('teamSearchInput')?.value || '');
+    renderOverviewKpiBoard();
+  }
+
+  if (currentSelectedTeamId) {
+    if (!isBackgroundRefresh) {
+      await loadRemoteScheduleOptions();
+    } else {
+      loadRemoteScheduleOptions();
+    }
+    renderAnnouncements();
+  }
+  renderTransactions();
+
+  if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setAuthenticated === 'function') {
+    BBTGateView.setAuthenticated(true);
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 async function initSystem() {
-  if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setLoading === 'function') {
+  const restoredUser = typeof BBTAuth !== 'undefined' && typeof BBTAuth.restoreSession === 'function'
+    ? BBTAuth.restoreSession()
+    : null;
+  currentUser = restoredUser;
+  window.currentUser = restoredUser;
+
+  // 1. 未登入：立即顯示登入閘門，不必等待後端整包資料
+  if (!restoredUser) {
+    showUnauthenticatedGate_();
+    return;
+  }
+
+  // 2. 已登入：若本地有快取先秒開，再背景同步最新資料
+  const cached = readInitCache_();
+  const hasCache = Boolean(cached && cached.data);
+  if (hasCache) {
+    applyInitPayload_(cached.data);
+    await renderAuthenticatedWorkspace_(true);
+  } else if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setLoading === 'function') {
     BBTGateView.setLoading(true, '正在同步聯盟與球隊資料...', '驗證登入狀態與載入資料中');
   }
 
-  const res = await BBTApi.getInitData(currentSeason, '');
-  if (res && res.result === 'ok') {
-    globalData.teams = res.teams || [];
-    globalData.roster = res.roster || [];
-    globalData.stats = res.stats || [];
-    globalData.announcements = res.announcements || [];
-    globalData.league_announcements = res.league_announcements || [];
-    globalData.transactions = res.transactions || [];
-    globalData.attendance = res.attendance || [];
-    globalData.users = res.users || [];
-    globalData.history = res.history || [];
-    globalData.seasons = res.seasons || [];
-    globalData.team_season_history = res.team_season_history || [];
+  // 3. 逾時保護（8 秒），避免後端冷啟動或網路異常時無限停留在載入畫面
+  const timeoutMs = 8000;
+  let timerId = null;
+  const timeoutPromise = new Promise(resolve => {
+    timerId = setTimeout(() => resolve({ result: 'timeout' }), timeoutMs);
+  });
 
-    if (res.fa_window_config && typeof saveFaWindowConfig_ === 'function') {
-      const mergedFaCfg = {
-        ...(typeof getDefaultFaWindowConfig_ === 'function' ? getDefaultFaWindowConfig_() : {}),
-        ...res.fa_window_config,
-        enabled: res.fa_window_config.enabled !== undefined ? Boolean(res.fa_window_config.enabled) : true
-      };
-      saveFaWindowConfig_(mergedFaCfg);
-      if (typeof syncFaWindowUiImmediately_ === 'function') {
-        syncFaWindowUiImmediately_(mergedFaCfg);
-      }
-    }
-    window.globalData = globalData;
+  try {
+    const res = await Promise.race([
+      BBTApi.getInitData(currentSeason, ''),
+      timeoutPromise
+    ]);
+    if (timerId) clearTimeout(timerId);
 
-    const restoredUser = typeof BBTAuth !== 'undefined' && typeof BBTAuth.restoreSession === 'function'
-      ? BBTAuth.restoreSession()
-      : null;
-    currentUser = restoredUser;
-    window.currentUser = restoredUser;
-
-    if (!restoredUser) {
-      document.getElementById('userNameDisplay').innerText = '未登入';
-      document.getElementById('userTitleDisplay').innerText = '請先登入系統';
-      const kpiSection = document.getElementById('unselectedKpiSection');
-      const selectedSection = document.getElementById('selectedTeamSection');
-      const leftSidebar = document.getElementById('leftTeamSidebar');
-      if (kpiSection) kpiSection.classList.add('hidden');
-      if (selectedSection) selectedSection.classList.add('hidden');
-      if (leftSidebar) leftSidebar.classList.add('hidden');
-
-      if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setAuthenticated === 'function') {
-        BBTGateView.setAuthenticated(false);
-      } else if (typeof BBTAuth !== 'undefined' && typeof BBTAuth.openLoginModal === 'function') {
-        BBTAuth.openLoginModal();
-      }
-      if (typeof lucide !== 'undefined') lucide.createIcons();
-      return;
-    }
-
-    if (typeof BBTAuth !== 'undefined' && typeof BBTAuth.applyRolePermissions === 'function') {
-      BBTAuth.applyRolePermissions();
-    }
-    currentUser = typeof BBTAuth !== 'undefined' && typeof BBTAuth.getCurrentUser === 'function'
-      ? BBTAuth.getCurrentUser()
-      : currentUser;
-
-    if (typeof renderSeasonDropdowns_ === 'function') {
-      renderSeasonDropdowns_();
-    }
-    syncDivisionButtonsUI();
-    if (isPersonalOrTeamView_()) {
-      const ownTeamId = getPreferredUserTeamId_();
-      if (ownTeamId) {
-        selectTeam(ownTeamId);
-      } else {
-        renderTeamSidebar('');
+    if (res && res.result === 'ok') {
+      applyInitPayload_(res);
+      writeInitCache_(res);
+      await renderAuthenticatedWorkspace_(false);
+    } else if (res && res.result === 'timeout') {
+      if (!hasCache) {
+        if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setLoading === 'function') {
+          BBTGateView.setLoading(false);
+        }
         renderOverviewKpiBoard();
+        alert('後端回應較慢（已逾 8 秒），請稍後再重新整理或檢查網路連線。');
       }
-    } else {
-      renderTeamSidebar(document.getElementById('teamSearchInput')?.value || '');
+    } else if (!hasCache) {
+      if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setLoading === 'function') {
+        BBTGateView.setLoading(false);
+      }
       renderOverviewKpiBoard();
+      alert('無法連線至 Google Sheets 資料庫，請檢查 API 網址或部署權限。');
     }
-
-    if (currentSelectedTeamId) {
-      await loadRemoteScheduleOptions();
-      renderAnnouncements();
+  } catch (err) {
+    if (timerId) clearTimeout(timerId);
+    if (!hasCache) {
+      if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setLoading === 'function') {
+        BBTGateView.setLoading(false);
+      }
+      renderOverviewKpiBoard();
+      alert('載入系統資料時發生錯誤，請稍後再試。');
     }
-    renderTransactions();
-
-    if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setAuthenticated === 'function') {
-      BBTGateView.setAuthenticated(true);
-    }
-  } else {
-    if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setLoading === 'function') {
-      BBTGateView.setLoading(false);
-    }
-    renderOverviewKpiBoard();
-    alert('無法連線至 Google Sheets 資料庫，請檢查 API 網址或部署權限。');
   }
+
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -553,11 +639,12 @@ function refreshLeagueFaCenterContent_(overrideCfg = null) {
               ? '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px] whitespace-nowrap">待審核</span>'
               : `<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold text-[10px] whitespace-nowrap">${statusText}</span>`);
 
+        const safeTxId = String(tx.tx_id).replace(/'/g, "\\'");
         const actionBtns = (isPending && tx.tx_id)
           ? `
             <div class="flex items-center gap-1.5 shrink-0">
-              <button type="button" onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'approved')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] whitespace-nowrap">核准</button>
-              <button type="button" onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'rejected')" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-black text-[11px] whitespace-nowrap">駁回</button>
+              <button type="button" onclick="openFaReviewModal('${safeTxId}', 'approved')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] whitespace-nowrap">核准</button>
+              <button type="button" onclick="openFaReviewModal('${safeTxId}', 'rejected')" class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-black text-[11px] whitespace-nowrap">駁回</button>
             </div>
           `
           : '';
@@ -687,14 +774,14 @@ function renderOverviewKpiBoard() {
   syncMobileViewportLayout(hasSelectedTeam);
 
   if (hasSelectedTeam) {
-    kpiSection.classList.add('hidden');
-    selectedSection.classList.remove('hidden');
+    if (kpiSection) kpiSection.classList.add('hidden');
+    if (selectedSection) selectedSection.classList.remove('hidden');
     if (typeof lucide !== 'undefined') lucide.createIcons();
     return;
   }
 
-  kpiSection.classList.remove('hidden');
-  selectedSection.classList.add('hidden');
+  if (kpiSection) kpiSection.classList.remove('hidden');
+  if (selectedSection) selectedSection.classList.add('hidden');
 
   const allTeams = globalData.teams || [];
   const isSuper = currentUser && currentUser.role === 'super_admin';
@@ -758,18 +845,23 @@ function renderOverviewKpiBoard() {
   const pendingTxCount = scopedTxs.filter(tx => String(tx.admin_status || '').trim() === 'pending').length;
   const historyTotal = scopedHistory.length + scopedTxs.length;
 
-  document.getElementById('kpiSeasonBadge').innerText = currentSeason;
-  document.getElementById('kpiSectionTitle').innerText = !isSuper
-    ? '我的球隊與賽季總覽'
-    : (isAllDiv ? '全聯盟 — 全球隊總覽' : `${currentDivision}組 — 球隊與賽季總覽`);
+  const setText_ = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.innerText = val;
+  };
 
-  document.getElementById('kpiTeamCount').innerText = scopedTeams.length;
-  document.getElementById('kpiTotalTeamSub').innerText = `全聯盟共 ${allTeams.length} 隊`;
-  document.getElementById('kpiRosterCount').innerText = uniqueActiveRosterIds.size;
-  document.getElementById('kpiAccountCountSub').innerText = `已建帳號 ${(globalData.users || []).length} 筆`;
-  document.getElementById('kpiAttendanceCount').innerText = scopedAtt.length;
-  document.getElementById('kpiTxHistoryCount').innerText = historyTotal;
-  document.getElementById('kpiPendingTxSub').innerText = `待審核 ${pendingTxCount} 筆`;
+  setText_('kpiSeasonBadge', currentSeason || '—');
+  setText_('kpiSectionTitle', !isSuper
+    ? '我的球隊與賽季總覽'
+    : (isAllDiv ? '全聯盟 — 全球隊總覽' : `${currentDivision}組 — 球隊與賽季總覽`));
+
+  setText_('kpiTeamCount', scopedTeams.length);
+  setText_('kpiTotalTeamSub', `全聯盟共 ${allTeams.length} 隊`);
+  setText_('kpiRosterCount', uniqueActiveRosterIds.size);
+  setText_('kpiAccountCountSub', `已建帳號 ${(globalData.users || []).length} 筆`);
+  setText_('kpiAttendanceCount', scopedAtt.length);
+  setText_('kpiTxHistoryCount', historyTotal);
+  setText_('kpiPendingTxSub', `待審核 ${pendingTxCount} 筆`);
 
   // 更新頂部 Header「FA 審查」按鈕待審件數提示
   const btnFaReviewHeader = document.getElementById('btnOpenFaReview');
@@ -1298,6 +1390,7 @@ async function submitEditRoster() {
 // --- 桌機版左側聯盟球隊清單 ---
 function renderTeamSidebar(searchKeyword = '') {
   const container = document.getElementById('teamSidebarContainer');
+  if (!container) return;
   const isAllDiv = currentDivision === 'ALL';
 
   const filtered = globalData.teams.filter(t => {
@@ -1306,9 +1399,12 @@ function renderTeamSidebar(searchKeyword = '') {
     return matchDiv && matchKey;
   });
 
-  document.getElementById('teamCountBadge').innerText = isAllDiv
-    ? `全聯盟 · ${filtered.length} 隊`
-    : `${currentDivision} · ${filtered.length} 隊`;
+  const badgeEl = document.getElementById('teamCountBadge');
+  if (badgeEl) {
+    badgeEl.innerText = isAllDiv
+      ? `全聯盟 · ${filtered.length} 隊`
+      : `${currentDivision} · ${filtered.length} 隊`;
+  }
 
   if (filtered.length === 0) {
     container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">目前尚無符合的球隊，可點選上方「+ 新增球隊」</div>`;
@@ -1369,12 +1465,17 @@ function selectTeam(teamId) {
 
   renderOverviewKpiBoard();
 
-  document.getElementById('teamTitle').innerText = team.team_name;
-  document.getElementById('teamDivisionBadge').innerText = team.division || '大聯盟組';
-  document.getElementById('teamIdBadge').innerText = team.team_id;
-  document.getElementById('teamIntroText').innerText = team.intro || '尚未填寫球隊介紹。';
-  document.getElementById('coachText').innerText = team.coach || '—';
-  document.getElementById('contactText').innerText = `${team.contact_name || '—'} (${team.contact_phone || ''})`;
+  const setElText_ = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.innerText = text;
+  };
+
+  setElText_('teamTitle', team.team_name);
+  setElText_('teamDivisionBadge', team.division || '大聯盟組');
+  setElText_('teamIdBadge', team.team_id);
+  setElText_('teamIntroText', team.intro || '尚未填寫球隊介紹。');
+  setElText_('coachText', team.coach || '—');
+  setElText_('contactText', `${team.contact_name || '—'} (${team.contact_phone || ''})`);
 
   const teamNameStr = String(team.team_name || '').trim();
   const fallbackChar = teamNameStr.substring(0, 1) || 'B';
@@ -1404,11 +1505,11 @@ function selectTeam(teamId) {
 }
 
 function updateTeamPlayerSelects() {
-  const editRecordId = document.getElementById('attEditRecordId').value;
+  const editRecordId = document.getElementById('attEditRecordId')?.value || '';
   const attUserSelect = document.getElementById('attUserSelect');
   const teamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
 
-  if (editRecordId) {
+  if (attUserSelect && editRecordId) {
     const attObj = globalData.attendance.find(a => String(a.att_id) === String(editRecordId));
     if (attObj) {
       const pObj = teamRoster.find(p => String(p.user_id) === String(attObj.user_id));
@@ -1420,14 +1521,14 @@ function updateTeamPlayerSelects() {
     }
   }
 
-  if (currentUser && currentUser.role === 'player') {
+  if (attUserSelect && currentUser && currentUser.role === 'player') {
     const selfObj = teamRoster.find(p => String(p.user_id) === String(currentUser.user_id));
     const selfLabel = selfObj
       ? `#${selfObj.number || '—'} ${selfObj.player_name} (${selfObj.position || '球員'})`
       : `${currentUser.name}`;
     attUserSelect.innerHTML = `<option value="${currentUser.user_id}" selected>${selfLabel}</option>`;
     attUserSelect.disabled = true;
-  } else {
+  } else if (attUserSelect) {
     attUserSelect.disabled = false;
     const selectedGameId = document.getElementById('attGameSelect') ? document.getElementById('attGameSelect').value : '';
     let availablePlayers = teamRoster;
@@ -1743,7 +1844,7 @@ async function loadRemoteScheduleOptions() {
 
 function renderAttendanceTable() {
   const tbody = document.getElementById('attendanceTableBody');
-  if (!currentSelectedTeamId) return;
+  if (!tbody || !currentSelectedTeamId) return;
 
   const filterSelect = document.getElementById('filterAttendanceGameSelect');
   const selectedGameFilter = filterSelect ? filterSelect.value : 'ALL';
@@ -1781,11 +1882,16 @@ function renderAttendanceTable() {
   }
   const unreportedCount = Math.max(0, totalRosterCount - reportedSet.size);
 
-  document.getElementById('statTotalRoster').innerText = totalRosterCount;
-  document.getElementById('statAttending').innerText = attendingCount;
-  document.getElementById('statLeave').innerText = leaveCount;
-  document.getElementById('statSub').innerText = subCount;
-  document.getElementById('statUnreported').innerText = unreportedCount;
+  const setStat_ = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.innerText = val;
+  };
+
+  setStat_('statTotalRoster', totalRosterCount);
+  setStat_('statAttending', attendingCount);
+  setStat_('statLeave', leaveCount);
+  setStat_('statSub', subCount);
+  setStat_('statUnreported', unreportedCount);
 
   if (list.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">目前選擇的場次尚無球員出勤與請假紀錄</td></tr>`;
@@ -2010,7 +2116,7 @@ function getApprovedFaForRosterRow_(rosterRow) {
 
 function renderRosterTable() {
   const tbody = document.getElementById('rosterTableBody');
-  if (!currentSelectedTeamId) return;
+  if (!tbody || !currentSelectedTeamId) return;
 
   const allTeamRoster = globalData.roster.filter(r => String(r.team_id) === String(currentSelectedTeamId));
 
@@ -2268,12 +2374,14 @@ async function openPlayerCard(userId) {
     }
 
     const btnEditSelf = document.getElementById('btnCardEditSelf');
-    if (currentUser && String(currentUser.user_id) === String(userId)) {
-      btnEditSelf.classList.remove('hidden');
-      btnEditSelf.classList.add('flex');
-    } else {
-      btnEditSelf.classList.add('hidden');
-      btnEditSelf.classList.remove('flex');
+    if (btnEditSelf) {
+      if (currentUser && String(currentUser.user_id) === String(userId)) {
+        btnEditSelf.classList.remove('hidden');
+        btnEditSelf.classList.add('flex');
+      } else {
+        btnEditSelf.classList.add('hidden');
+        btnEditSelf.classList.remove('flex');
+      }
     }
 
     activePlayerCardCache = { season, career };
@@ -2941,11 +3049,14 @@ function renderTransactions() {
       ? 'bg-emerald-100 text-emerald-800'
       : (pending ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800');
 
+    const safeTxId = String(tx.tx_id).replace(/'/g, "\\'");
+    const safeUserId = String(tx.user_id || '').replace(/'/g, "\\'");
+
     const reviewActionsHtml = (allowLeagueReview && pending && tx.tx_id)
       ? `
         <div class="mt-1.5 flex items-center justify-end gap-1">
-          <button onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'approved')" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black whitespace-nowrap">聯盟核准</button>
-          <button onclick="openFaReviewModal('${String(tx.tx_id).replace(/'/g, "\'")}', 'rejected')" class="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-black whitespace-nowrap">聯盟駁回</button>
+          <button onclick="openFaReviewModal('${safeTxId}', 'approved')" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black whitespace-nowrap">聯盟核准</button>
+          <button onclick="openFaReviewModal('${safeTxId}', 'rejected')" class="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-black whitespace-nowrap">聯盟駁回</button>
         </div>
       `
       : '';
@@ -2963,7 +3074,7 @@ function renderTransactions() {
           ${modeBadge}
         </td>
         <td class="p-3 whitespace-nowrap">
-          <button type="button" onclick="openPlayerCard('${String(tx.user_id || '').replace(/'/g, "\'")}') " class="font-black text-bbt-navy hover:text-emerald-600 underline decoration-emerald-400 decoration-2 underline-offset-4 flex items-center gap-1 whitespace-nowrap">
+          <button type="button" onclick="openPlayerCard('${safeUserId}')" class="font-black text-bbt-navy hover:text-emerald-600 underline decoration-emerald-400 decoration-2 underline-offset-4 flex items-center gap-1 whitespace-nowrap">
             <span>${formatTxPlayerName_(tx)}</span>
             <i data-lucide="id-card" class="w-3.5 h-3.5 text-emerald-600 shrink-0"></i>
           </button>
@@ -3210,9 +3321,11 @@ function switchDiv(divName) {
 
 function switchTab(tabId) {
   document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
-  document.getElementById('panel-' + tabId).classList.remove('hidden');
+  const panelEl = document.getElementById('panel-' + tabId);
+  if (panelEl) panelEl.classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(btn => { btn.className = "tab-btn px-5 py-3.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center space-x-1.5 whitespace-nowrap"; });
-  document.getElementById('tab-' + tabId).className = "tab-btn px-5 py-3.5 text-xs font-black border-b-2 border-emerald-600 text-emerald-700 bg-white flex items-center space-x-1.5 whitespace-nowrap";
+  const tabEl = document.getElementById('tab-' + tabId);
+  if (tabEl) tabEl.className = "tab-btn px-5 py-3.5 text-xs font-black border-b-2 border-emerald-600 text-emerald-700 bg-white flex items-center space-x-1.5 whitespace-nowrap";
 }
 
 function filterRosterRole(role) {
@@ -3225,7 +3338,7 @@ function filterRosterRole(role) {
 }
 
 function filterTeamSidebar(keyword) { renderTeamSidebar(keyword); }
-function onSeasonChange(season) { currentSeason = season; initSystem(); }
+function onSeasonChange(season) { currentSeason = season; window.currentSeason = season; initSystem(); }
 
 // ============================================================================
 // 球季清單管理、球隊加入球季設定與歷屆球季戰績模組
@@ -3476,22 +3589,25 @@ function renderSeasonManagerList_() {
   });
   const seasons = Array.from(dedupMap.values());
 
-  container.innerHTML = seasons.map(s => `
-    <div class="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-2">
-      <div class="min-w-0">
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="font-black text-slate-900">${s.season_name}</span>
-          <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold text-[10px]">${s.season_id}</span>
+  container.innerHTML = seasons.map(s => {
+    const safeSid = String(s.season_id).replace(/'/g, "\\'");
+    return `
+      <div class="p-3 rounded-xl border border-slate-200 bg-white flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-black text-slate-900">${s.season_name}</span>
+            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold text-[10px]">${s.season_id}</span>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-0.5">年度：${s.year}</div>
         </div>
-        <div class="text-[11px] text-slate-400 mt-0.5">年度：${s.year}</div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" onclick="startEditSeason_('${safeSid}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] whitespace-nowrap">
+            異動
+          </button>
+        </div>
       </div>
-      <div class="flex items-center gap-1.5 shrink-0">
-        <button type="button" onclick="startEditSeason_('${String(s.season_id).replace(/'/g, "'")}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] whitespace-nowrap">
-          異動
-        </button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 async function syncAfterSeasonSave_(payload, isEditing, originalSeasonId) {
@@ -3846,6 +3962,8 @@ function renderTeamSeasonHistoryTab() {
       (!p.season || String(p.season) === String(r.season))
     ).length;
 
+    const safeSeason = String(r.season).replace(/'/g, "\\'");
+
     return `
       <tr class="hover:bg-slate-50 transition">
         <td class="p-3 font-black text-slate-900 whitespace-nowrap">
@@ -3861,10 +3979,33 @@ function renderTeamSeasonHistoryTab() {
         <td class="p-3 text-center font-black text-emerald-700 whitespace-nowrap">${seasonRosterCount} 人</td>
         <td class="p-3 text-right whitespace-nowrap">
           ${canEdit
-            ? `<button type="button" onclick="openTeamSeasonModal('${String(r.season).replace(/'/g, "\\'")}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">編輯</button>`
+            ? `<button type="button" onclick="openTeamSeasonModal('${safeSeason}')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition">編輯</button>`
             : '<span class="text-slate-300 text-[10px]">—</span>'}
         </td>
       </tr>
     `;
   }).join('');
 }
+
+// ============================================================================
+// 系統自動啟動入口（確保頁面載入時執行初始化與動作提示掛載）
+// ============================================================================
+(function bootBBTIndexOnce_() {
+  if (window.__BBT_INDEX_BOOTED__) return;
+  window.__BBT_INDEX_BOOTED__ = true;
+
+  const runBoot = () => {
+    if (typeof attachActionFeedbackHooks_ === 'function') {
+      attachActionFeedbackHooks_();
+    }
+    if (typeof initSystem === 'function') {
+      initSystem();
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', runBoot, { once: true });
+  } else {
+    runBoot();
+  }
+})();
