@@ -795,8 +795,15 @@ function renderOverviewKpiBoard() {
   const scopedTeamNames = new Set(
     scopedTeams.map(t => String(t.team_name || '').trim()).filter(Boolean)
   );
-  const scopedRoster = (globalData.roster || []).filter(r => {
-    if (!scopedTeamIds.has(String(r.team_id).trim())) return false;
+
+  const scopedRosterAll = (globalData.roster || []).filter(r =>
+    scopedTeamIds.has(String(r.team_id || '').trim())
+  );
+  const scopedUserIds = new Set(
+    scopedRosterAll.map(r => String(r.user_id || '').trim()).filter(Boolean)
+  );
+
+  const scopedRoster = scopedRosterAll.filter(r => {
     const statusStr = String(r.status || '').trim().toLowerCase();
     if (statusStr !== 'approved') return false;
     if (getApprovedFaForRosterRow_(r)) return false;
@@ -807,41 +814,28 @@ function renderOverviewKpiBoard() {
   );
   const scopedAtt = (globalData.attendance || []).filter(a => scopedTeamIds.has(String(a.team_id).trim()));
 
-  const isTxInScope_ = (tx) => {
+  const isRecordInScope_ = (rec) => {
     if (!isSuper || isAllDiv) return true;
+    if (scopedTeams.length === 0) return false;
+
     const refs = [
-      String(tx.from_team_id || '').trim(),
-      String(tx.to_team_id || '').trim(),
-      String(tx.team_id || '').trim(),
-      String(tx.from_team_name || '').trim(),
-      String(tx.to_team_name || '').trim()
+      String(rec.from_team_id || '').trim(),
+      String(rec.to_team_id || '').trim(),
+      String(rec.team_id || '').trim(),
+      String(rec.from_team_name || '').trim(),
+      String(rec.to_team_name || '').trim()
     ].filter(Boolean);
-    if (refs.some(v => scopedTeamIds.has(v) || scopedTeamNames.has(v))) {
-      return true;
+
+    if (refs.length > 0) {
+      return refs.some(v => scopedTeamIds.has(v) || scopedTeamNames.has(v));
     }
-    const uid = String(tx.user_id || '').trim();
-    if (!uid) return false;
-    return (globalData.roster || []).some(r =>
-      String(r.user_id || '').trim() === uid && scopedTeamIds.has(String(r.team_id).trim())
-    );
+
+    const uid = String(rec.user_id || '').trim();
+    return Boolean(uid && scopedUserIds.has(uid));
   };
 
-  const isHistoryInScope_ = (h) => {
-    if (!isSuper || isAllDiv) return true;
-    const tid = String(h.team_id || '').trim();
-    const tname = String(h.team_name || '').trim();
-    if ((tid && scopedTeamIds.has(tid)) || (tname && scopedTeamNames.has(tname))) {
-      return true;
-    }
-    const uid = String(h.user_id || '').trim();
-    if (!uid) return false;
-    return (globalData.roster || []).some(r =>
-      String(r.user_id || '').trim() === uid && scopedTeamIds.has(String(r.team_id).trim())
-    );
-  };
-
-  const scopedTxs = (globalData.transactions || []).filter(isTxInScope_);
-  const scopedHistory = (globalData.history || []).filter(isHistoryInScope_);
+  const scopedTxs = (globalData.transactions || []).filter(isRecordInScope_);
+  const scopedHistory = (globalData.history || []).filter(isRecordInScope_);
   const pendingTxCount = scopedTxs.filter(tx => String(tx.admin_status || '').trim() === 'pending').length;
   const historyTotal = scopedHistory.length + scopedTxs.length;
 
@@ -850,10 +844,13 @@ function renderOverviewKpiBoard() {
     if (el) el.innerText = val;
   };
 
+  const divLabel = String(currentDivision || '').trim();
+  const divTitleText = divLabel.endsWith('組') ? divLabel : `${divLabel}組`;
+
   setText_('kpiSeasonBadge', currentSeason || '—');
   setText_('kpiSectionTitle', !isSuper
     ? '我的球隊與賽季總覽'
-    : (isAllDiv ? '全聯盟 — 全球隊總覽' : `${currentDivision}組 — 球隊與賽季總覽`));
+    : (isAllDiv ? '全聯盟 — 全球隊總覽' : `${divTitleText} — 球隊與賽季總覽`));
 
   setText_('kpiTeamCount', scopedTeams.length);
   setText_('kpiTotalTeamSub', `全聯盟共 ${allTeams.length} 隊`);
@@ -978,6 +975,9 @@ function renderOverviewKpiBoard() {
     }
   }
 
+  if (typeof compactToolbarAndOverviewLayout_ === 'function') {
+    compactToolbarAndOverviewLayout_();
+  }
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -1407,7 +1407,7 @@ function renderTeamSidebar(searchKeyword = '') {
   }
 
   if (filtered.length === 0) {
-    container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">目前尚無符合的球隊，可點選上方「+ 新增球隊」</div>`;
+    container.innerHTML = `<div class="text-center py-6 text-slate-400 text-xs">目前尚無符合的球隊</div>`;
     return;
   }
 
