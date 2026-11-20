@@ -3,7 +3,7 @@
 // 整合帳號登入、Session Token 夾帶、建帳與選帳登錄、個人資料、權限指派與 FA 審查
 // ============================================================================
 
-const API_BASE_URL = "https://script.google.com/macros/s/AKfycbwPCY6em9MqmzfdVd8ezuBG0AShvXAYgInYGSHOdIEApPY81lILgfUZ3OCBApVQdKYIpw/exec";
+const API_BASE_URL = "https://script.google.com/macros/s/AKfycbykd7rZqM7Wh3eBtE_fCnAKuBF0S-qSpHExCofX9iMcrD38PKDkXVOJxE14GNkARQuF5g/exec";
 const AUTH_SESSION_STORAGE_KEY = 'bbt_auth_session';
 
 function getStoredAuthToken_() {
