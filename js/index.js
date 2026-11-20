@@ -268,7 +268,7 @@ function syncPersonalHeaderAndLayout_() {
     headerAdminRow.classList.toggle('hidden', !hasAnyAdminBtn);
   }
 
-  // 3. 個人登入時隱藏左側「聯盟球隊清單」側邊欄與「返回 KPI 總覽」按鈕
+  // 3. 個人登入時隱藏左側「聯盟球隊清單」側邊欄與「返回 KPI 總覽」按鈕；總管理員保留左側清單
   const leftSidebar = document.getElementById('leftTeamSidebar');
   const mainGrid = leftSidebar ? leftSidebar.parentElement : null;
   if (leftSidebar) {
@@ -280,7 +280,8 @@ function syncPersonalHeaderAndLayout_() {
         mainGrid.classList.add('grid-cols-1');
       }
     } else {
-      leftSidebar.classList.remove('lg:block');
+      leftSidebar.classList.remove('hidden');
+      leftSidebar.classList.add('lg:block');
       if (mainGrid) {
         mainGrid.classList.add('lg:grid-cols-12');
         mainGrid.classList.remove('grid-cols-1');
@@ -361,9 +362,16 @@ function groupTeamsByDivision(teamsList) {
 
 // --- 控制手機版側邊欄與返回按鈕，避免手機重複清單與過度捲動 ---
 function syncMobileViewportLayout(hasSelectedTeam) {
+  const isPersonalView = typeof isPersonalOrTeamView_ === 'function' ? isPersonalOrTeamView_() : false;
   const leftSidebar = document.getElementById('leftTeamSidebar');
   if (leftSidebar) {
-    leftSidebar.classList.add('hidden', 'lg:block');
+    if (isPersonalView) {
+      leftSidebar.classList.add('hidden');
+      leftSidebar.classList.remove('lg:block');
+    } else {
+      leftSidebar.classList.remove('hidden');
+      leftSidebar.classList.add('lg:block');
+    }
   }
 
   const selectedSection = document.getElementById('selectedTeamSection');
@@ -1477,16 +1485,9 @@ function selectTeam(teamId) {
   setElText_('coachText', team.coach || '—');
   setElText_('contactText', `${team.contact_name || '—'} (${team.contact_phone || ''})`);
 
-  const teamNameStr = String(team.team_name || '').trim();
-  const fallbackChar = teamNameStr.substring(0, 1) || 'B';
-  const logoPath = `logo/${team.team_id}.png`;
-
   const logoContainer = document.getElementById('teamLogoContainer');
-  if (logoContainer) {
-    logoContainer.innerHTML = `
-      <img src="${logoPath}" alt="${team.team_name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-      <span style="display:none;" class="w-full h-full items-center justify-center">${fallbackChar}</span>
-    `;
+  if (logoContainer && typeof buildTeamLogoHtml === 'function') {
+    logoContainer.outerHTML = buildTeamLogoHtml(team, 'w-14 h-14 text-lg');
   }
 
   if (document.getElementById('editTeamIntro')) document.getElementById('editTeamIntro').value = team.intro || '';
@@ -3239,62 +3240,997 @@ function getActiveAuthToken_() {
   return '';
 }
 
-window.saveCurrentTeamProfile = async function () {
-  const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
-  if (!tid) return;
 
-  const token = getActiveAuthToken_();
-  if (!token) {
-    alert('⚠️ 尚未取得登入憑證，請先重新登入後再儲存');
-    return;
+// ============================================================================
+// 統一隊徽渲染、Google Drive 上傳、左側篩選器搬移與批次作業完整模組
+// ============================================================================
+(function initBBTUnifiedFeatures_() {
+  const leftFilterState = {
+    division: window.currentDivision || 'ALL',
+    season: window.currentSeason || ''
+  };
+
+  let pendingLogoUploadData_ = null;
+
+  function getActiveAuthToken_() {
+    const candidates = [
+      window.authToken,
+      window.currentToken,
+      window.currentUser && window.currentUser.token,
+      sessionStorage.getItem('bbt_auth_token'),
+      sessionStorage.getItem('token'),
+      localStorage.getItem('bbt_auth_token'),
+      localStorage.getItem('token')
+    ];
+    for (const val of candidates) {
+      if (typeof val === 'string' && val.trim()) {
+        return val.trim();
+      }
+    }
+    return '';
   }
 
-  const intro = document.getElementById('editTeamIntro')?.value ?? '';
-  const contact = document.getElementById('editTeamContact')?.value ?? '';
-  const phone = document.getElementById('editTeamPhone')?.value ?? '';
-  const logoPath = document.getElementById('editTeamLogoPath')?.value || `/img/${tid}.png`;
+  function normalizeLogoUrl_(rawUrl) {
+    const clean = String(rawUrl || '').trim();
+    if (!clean) return '';
+    if (clean.startsWith('/img/')) return clean.slice(1);
+    return clean;
+  }
 
-  if (pendingLogoUploadData_ && typeof callApi === 'function') {
-    try {
-      await callApi('uploadTeamLogo', {
+  // --- 1. 統一隊徽渲染（支援 Drive URL、Data URL 與相對路徑 img/，失敗自動退回首字方塊） ---
+  window.buildTeamLogoHtml = function (team, sizeClass = 'w-10 h-10 text-sm') {
+    const t = team || {};
+    const tid = String(t.team_id || '').trim();
+    const rawUrl = String(t.logo_url || t.logo_path || '').trim();
+    const normalizedUrl = normalizeLogoUrl_(rawUrl);
+    const fallbackText = String(t.team_name || tid || '?').trim().slice(0, 1) || '?';
+    const isValidSrc =
+      /^https?:\/\//i.test(normalizedUrl) ||
+      normalizedUrl.startsWith('data:image/') ||
+      normalizedUrl.startsWith('img/');
+
+    if (isValidSrc) {
+      return `
+        <span class="relative inline-flex items-center justify-center ${sizeClass} rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+          <img
+            src="${normalizedUrl}"
+            alt="${String(t.team_name || '隊徽')}"
+            class="w-full h-full object-cover"
+            onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
+          />
+          <span class="hidden w-full h-full items-center justify-center bg-emerald-600 text-white font-black">${fallbackText}</span>
+        </span>
+      `;
+    }
+
+    return `<span class="inline-flex items-center justify-center ${sizeClass} rounded-xl bg-emerald-600 text-white font-black shrink-0">${fallbackText}</span>`;
+  };
+
+  function refreshRightPanelLogo_(teamObj) {
+    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
+    const t = teamObj || (window.globalData?.teams || []).find(item => String(item.team_id) === tid);
+    if (!t || typeof window.buildTeamLogoHtml !== 'function') return;
+
+    const container =
+      document.getElementById('teamLogoContainer') ||
+      document.getElementById('teamDetailLogo') ||
+      document.querySelector('[data-team-detail-logo]');
+
+    if (container) {
+      container.outerHTML = window.buildTeamLogoHtml(t, 'w-14 h-14 text-lg');
+    }
+  }
+
+  // --- 2. 球隊簡介維護與 Google Drive 隊徽上傳 ---
+  function renameTeamIntroButton_() {
+    document.querySelectorAll('button').forEach(btn => {
+      const txt = String(btn.textContent || '').replace(/\s+/g, '').trim();
+      if (txt.includes('隊服與介紹維護') || txt.includes('球隊簡介維護')) {
+        btn.classList.add('whitespace-nowrap', 'inline-flex', 'items-center', 'gap-1.5', 'shrink-0');
+        btn.innerHTML = `<i data-lucide="file-text" class="w-3.5 h-3.5 shrink-0"></i><span>球隊簡介維護</span>`;
+      }
+    });
+  }
+
+  function ensureTeamIntroAndLogoModal_() {
+    let modal = document.getElementById('teamProfileModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'teamProfileModal';
+      modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-3';
+      document.body.appendChild(modal);
+    }
+
+    if (!document.getElementById('editTeamLogoPath')) {
+      modal.innerHTML = `
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+          <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
+            <div class="font-black text-sm flex items-center gap-2">
+              <i data-lucide="image" class="w-4 h-4 text-emerald-400"></i>
+              <span>球隊簡介維護與隊徽設定</span>
+            </div>
+            <button type="button" onclick="closeTeamProfileModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1">✕</button>
+          </div>
+          <div class="p-4 overflow-y-auto space-y-3 text-xs">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">球隊簡介</label>
+              <textarea id="editTeamIntro" rows="3" placeholder="請輸入球隊簡介..." class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500"></textarea>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">球隊聯絡窗口</label>
+                <input id="editTeamContact" type="text" class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500">
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">聯絡電話</label>
+                <input id="editTeamPhone" type="text" class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500">
+              </div>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-black text-slate-800">隊徽上傳（Google Drive BBT_img / 備援 img）</span>
+                <span id="teamLogoTargetPathHint" class="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">BBT_img</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <img id="editTeamLogoPreview" src="" alt="隊徽預覽" class="w-14 h-14 rounded-xl object-cover border border-slate-200 bg-white hidden">
+                <div class="flex-1 space-y-1.5">
+                  <input id="editTeamLogoFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleTeamLogoFileChange_(event)" class="block w-full text-[11px] text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+                  <input id="editTeamLogoPath" type="text" oninput="syncLogoPathHint_(this.value)" placeholder="自動填入 Drive 連結或 img/隊伍代號.png" class="w-full px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-mono text-slate-700 focus:outline-none focus:border-emerald-500">
+                </div>
+              </div>
+              <p class="text-[11px] text-slate-500 leading-relaxed">
+                選取圖片並等待預覽顯示後按「儲存簡介與隊徽設定」，系統會自動上傳至 Google Drive 的 <code class="font-mono text-slate-700">BBT_img</code> 目錄並更新隊徽連結。
+              </p>
+            </div>
+          </div>
+          <div class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
+            <button type="button" onclick="closeTeamProfileModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100">取消</button>
+            <button type="button" onclick="saveCurrentTeamProfile()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700">儲存簡介與隊徽設定</button>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  window.syncLogoPathHint_ = function (val) {
+    const clean = String(val || '').trim();
+    const hintEl = document.getElementById('teamLogoTargetPathHint');
+    if (hintEl) hintEl.innerText = clean || 'BBT_img';
+  };
+
+  window.handleTeamLogoFileChange_ = function (evt) {
+    const file = evt?.target?.files?.[0];
+    const teamId = String(window.currentSelectedTeamId || currentSelectedTeamId || 'team').trim();
+    pendingLogoUploadData_ = null;
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('⚠️ 隊徽檔案超過 2MB，建議壓縮後再上傳以加快載入速度');
+    }
+
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+    const fileName = `${teamId}.${ext}`;
+    const pathInput = document.getElementById('editTeamLogoPath');
+    if (pathInput) pathInput.value = `BBT_img/${fileName}`;
+    window.syncLogoPathHint_(`BBT_img/${fileName}`);
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const dataUrl = String(e.target?.result || '');
+      const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
+      pendingLogoUploadData_ = {
+        fileName,
+        mimeType: file.type || 'image/png',
+        base64,
+        dataUrl
+      };
+
+      const previewEl = document.getElementById('editTeamLogoPreview');
+      if (previewEl && dataUrl) {
+        previewEl.src = dataUrl;
+        previewEl.classList.remove('hidden');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  window.openTeamProfileModal = function () {
+    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
+    if (!tid) {
+      alert('請先選擇球隊');
+      return;
+    }
+    ensureTeamIntroAndLogoModal_();
+    pendingLogoUploadData_ = null;
+
+    const team = (window.globalData?.teams || []).find(t => String(t.team_id) === tid) || {};
+    const currentLogo = normalizeLogoUrl_(team.logo_url || team.logo_path || '');
+
+    if (document.getElementById('editTeamIntro')) document.getElementById('editTeamIntro').value = team.intro || '';
+    if (document.getElementById('editTeamContact')) document.getElementById('editTeamContact').value = team.contact_name || '';
+    if (document.getElementById('editTeamPhone')) document.getElementById('editTeamPhone').value = team.contact_phone || '';
+    if (document.getElementById('editTeamLogoPath')) document.getElementById('editTeamLogoPath').value = currentLogo;
+    if (document.getElementById('editTeamLogoFile')) document.getElementById('editTeamLogoFile').value = '';
+    window.syncLogoPathHint_(currentLogo || 'BBT_img');
+
+    const previewEl = document.getElementById('editTeamLogoPreview');
+    if (previewEl) {
+      if (currentLogo) {
+        previewEl.src = currentLogo;
+        previewEl.classList.remove('hidden');
+        previewEl.onerror = () => previewEl.classList.add('hidden');
+      } else {
+        previewEl.classList.add('hidden');
+      }
+    }
+
+    const m = document.getElementById('teamProfileModal');
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  };
+
+  window.closeTeamProfileModal = function () {
+    pendingLogoUploadData_ = null;
+    const m = document.getElementById('teamProfileModal');
+    if (!m) return;
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+  };
+
+  window.saveCurrentTeamProfile = async function () {
+    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
+    if (!tid) return;
+
+    const token = getActiveAuthToken_();
+    if (!token) {
+      alert('⚠️ 尚未取得登入憑證，請先重新登入後再儲存');
+      return;
+    }
+
+    const fileInput = document.getElementById('editTeamLogoFile');
+    if (fileInput && fileInput.files && fileInput.files[0] && !pendingLogoUploadData_) {
+      alert('⏳ 圖片仍在讀取中，請稍等 1 秒再按儲存');
+      return;
+    }
+
+    const intro = document.getElementById('editTeamIntro')?.value ?? '';
+    const contact = document.getElementById('editTeamContact')?.value ?? '';
+    const phone = document.getElementById('editTeamPhone')?.value ?? '';
+
+    const existingTeam = (window.globalData?.teams || []).find(t => String(t.team_id) === tid) || {};
+    let finalLogoUrl = normalizeLogoUrl_(existingTeam.logo_url || '');
+    if (finalLogoUrl && !/^https?:\/\//i.test(finalLogoUrl) && !finalLogoUrl.startsWith('data:') && !finalLogoUrl.startsWith('img/')) {
+      finalLogoUrl = '';
+    }
+
+    if (pendingLogoUploadData_ && pendingLogoUploadData_.base64) {
+      if (typeof callApi !== 'function') {
+        alert('❌ 找不到 callApi 函式，無法上傳至 Google Drive');
+        return;
+      }
+
+      const uploadRes = await callApi('uploadTeamLogo', {
         token,
         team_id: tid,
-        upload_dir: '/img',
         file_name: pendingLogoUploadData_.fileName,
-        target_path: pendingLogoUploadData_.targetPath,
         mime_type: pendingLogoUploadData_.mimeType,
         base64: pendingLogoUploadData_.base64
       });
-    } catch (e) {
-      // 若後端尚未實作 uploadTeamLogo，仍繼續儲存簡介與路徑設定
+
+      console.log('[uploadTeamLogo response]', uploadRes);
+
+      if (!uploadRes || uploadRes.result !== 'ok' || !uploadRes.logo_url) {
+        alert('❌ 隊徽上傳到 Google Drive 失敗：' + (uploadRes?.message || '未回傳有效 logo_url'));
+        return;
+      }
+      finalLogoUrl = String(uploadRes.logo_url).trim();
+    }
+
+    const res = await BBTApi.saveTeamProfile({
+      token,
+      team_id: tid,
+      intro,
+      contact_name: contact,
+      contact_phone: phone,
+      logo_url: finalLogoUrl,
+      logo_path: finalLogoUrl
+    });
+
+    if (res && res.result === 'ok') {
+      pendingLogoUploadData_ = null;
+      if (fileInput) fileInput.value = '';
+      if (existingTeam) {
+        existingTeam.intro = intro;
+        existingTeam.contact_name = contact;
+        existingTeam.contact_phone = phone;
+        existingTeam.logo_url = finalLogoUrl;
+      }
+      alert('✅ 球隊簡介與隊徽已儲存！');
+      window.closeTeamProfileModal();
+      if (typeof initSystem === 'function') await initSystem();
+      if (typeof selectTeam === 'function') selectTeam(tid);
+      refreshRightPanelLogo_(existingTeam);
+    } else {
+      alert('❌ 儲存失敗: ' + (res?.message || ''));
+    }
+  };
+
+  // --- 3. 左側篩選器搬移與保留左側清單 ---
+  function getSeasonSelectEl_() {
+    return (
+      document.getElementById('seasonSelect') ||
+      document.getElementById('leagueSeasonSelect') ||
+      Array.from(document.querySelectorAll('select')).find(sel =>
+        Array.from(sel.options || []).some(opt => /季|S\d+/i.test(opt.textContent || ''))
+      ) ||
+      null
+    );
+  }
+
+  function findDivisionBarEl_() {
+    const candidates = Array.from(document.querySelectorAll('div, section'));
+    for (const el of candidates) {
+      if (el.dataset && el.dataset.bbtLeftFilterBar === '1') return el;
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      const buttons = Array.from(el.querySelectorAll('button'));
+      const hasDivBtns = ['全聯盟', '大聯盟', '小聯盟', '育成組'].filter(label =>
+        buttons.some(b => (b.textContent || '').trim() === label)
+      );
+      if (hasDivBtns.length >= 3 && text.length < 120 && buttons.length <= 6) {
+        return el;
+      }
+    }
+    return null;
+  }
+
+  function findLeftTeamSidebarEl_() {
+    const byId = document.getElementById('leftTeamSidebar');
+    if (byId) return byId;
+
+    const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4, div, span'));
+    const targetHeading = headings.find(n => (n.textContent || '').trim() === '聯盟球隊清單');
+    if (targetHeading) {
+      let cur = targetHeading.parentElement;
+      for (let i = 0; i < 6 && cur; i++) {
+        const rect = cur.getBoundingClientRect();
+        if (rect.width > 180 && rect.width < 460 && cur.querySelector('input')) {
+          return cur;
+        }
+        cur = cur.parentElement;
+      }
+    }
+    return null;
+  }
+
+  function applyLeftFilterToTeams_() {
+    const seasonSel = getSeasonSelectEl_();
+    if (seasonSel && seasonSel.value) {
+      leftFilterState.season = String(seasonSel.value).trim();
+    }
+
+    const sidebar = findLeftTeamSidebarEl_();
+    if (!sidebar) return;
+
+    const searchInput = sidebar.querySelector('input');
+    const keyword = String(searchInput?.value || '').trim().toLowerCase();
+
+    const teamMap = new Map();
+    (window.globalData?.teams || []).forEach(t => {
+      teamMap.set(String(t.team_id || '').trim(), t);
+      if (t.team_name) teamMap.set(String(t.team_name).trim(), t);
+    });
+
+    const clickableRows = Array.from(sidebar.querySelectorAll('button, [role="button"], .cursor-pointer'));
+    clickableRows.forEach(row => {
+      if (row.closest('[data-bbt-left-filter-bar="1"]')) return;
+      const rowText = (row.textContent || '').trim();
+      if (!rowText || rowText.includes('搜尋球隊')) return;
+
+      const matchedTeam = Array.from(teamMap.values()).find(t => {
+        const name = String(t.team_name || '').trim();
+        const tid = String(t.team_id || '').trim();
+        return (name && rowText.includes(name)) || (tid && rowText.includes(tid));
+      });
+      if (!matchedTeam) return;
+
+      const divVal = String(matchedTeam.division || '').trim();
+      const seasonVal = String(matchedTeam.season || '').trim();
+      const matchDiv = leftFilterState.division === 'ALL' || !divVal || divVal.includes(leftFilterState.division);
+      const matchSeason = !leftFilterState.season || !seasonVal || seasonVal === leftFilterState.season;
+      const matchSearch =
+        !keyword ||
+        String(matchedTeam.team_name || '').toLowerCase().includes(keyword) ||
+        String(matchedTeam.coach_name || matchedTeam.coach || '').toLowerCase().includes(keyword);
+
+      row.style.display = (matchDiv && matchSeason && matchSearch) ? '' : 'none';
+    });
+  }
+
+  function syncDivisionButtonsUI_(filterBar) {
+    if (!filterBar) return;
+    filterBar.querySelectorAll('button[data-div-key]').forEach(btn => {
+      const active = btn.dataset.divKey === leftFilterState.division;
+      btn.className = active
+        ? 'px-2.5 py-1 rounded-lg text-xs font-bold border transition cursor-pointer bg-slate-900 text-white border-slate-900'
+        : 'px-2.5 py-1 rounded-lg text-xs font-bold border transition cursor-pointer bg-white text-slate-700 border-slate-200 hover:bg-slate-100';
+    });
+  }
+
+  function moveFiltersToLeftSidebar_() {
+    const sidebar = findLeftTeamSidebarEl_();
+    if (!sidebar) return;
+
+    let filterBar = sidebar.querySelector('[data-bbt-left-filter-bar="1"]');
+    const divBar = findDivisionBarEl_();
+    const seasonSel = getSeasonSelectEl_();
+
+    if (!filterBar) {
+      filterBar = document.createElement('div');
+      filterBar.dataset.bbtLeftFilterBar = '1';
+      filterBar.className = 'mb-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2';
+
+      const divWrap = document.createElement('div');
+      divWrap.className = 'flex flex-wrap gap-1.5';
+      ['ALL', '大聯盟', '小聯盟', '育成組'].forEach(key => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.divKey = key;
+        btn.textContent = key === 'ALL' ? '全聯盟' : key;
+        btn.className =
+          'px-2.5 py-1 rounded-lg text-xs font-bold border transition cursor-pointer bg-white text-slate-700 border-slate-200 hover:bg-slate-100';
+        btn.addEventListener('click', () => {
+          leftFilterState.division = key;
+          syncDivisionButtonsUI_(filterBar);
+
+          if (divBar) {
+            const origBtn = Array.from(divBar.querySelectorAll('button')).find(
+              b => (b.textContent || '').trim() === (key === 'ALL' ? '全聯盟' : key)
+            );
+            if (origBtn) origBtn.click();
+          }
+          applyLeftFilterToTeams_();
+        });
+        divWrap.appendChild(btn);
+      });
+
+      filterBar.appendChild(divWrap);
+
+      if (seasonSel) {
+        seasonSel.classList.add('w-full', 'text-xs', 'rounded-lg', 'border', 'border-slate-200', 'bg-white', 'px-2.5', 'py-1.5', 'font-bold');
+        seasonSel.addEventListener('change', () => {
+          leftFilterState.season = String(seasonSel.value || '').trim();
+          applyLeftFilterToTeams_();
+        });
+        filterBar.appendChild(seasonSel);
+      }
+
+      const searchEl = sidebar.querySelector('input');
+      if (searchEl && searchEl.parentElement && searchEl.parentElement !== sidebar) {
+        sidebar.insertBefore(filterBar, searchEl.parentElement);
+      } else if (searchEl) {
+        sidebar.insertBefore(filterBar, searchEl);
+      } else {
+        sidebar.appendChild(filterBar);
+      }
+    }
+
+    syncDivisionButtonsUI_(filterBar);
+    applyLeftFilterToTeams_();
+  }
+
+  function ensureSidebarStaysVisible_() {
+    const isPersonalView = typeof isPersonalOrTeamView_ === 'function' ? isPersonalOrTeamView_() : false;
+    const sidebar = findLeftTeamSidebarEl_();
+    if (!sidebar) return;
+    if (isPersonalView) {
+      sidebar.classList.add('hidden');
+      sidebar.classList.remove('lg:block');
+    } else {
+      sidebar.classList.remove('hidden');
+      sidebar.classList.add('lg:block');
+      if (sidebar.parentElement) {
+        sidebar.parentElement.classList.add('lg:grid-cols-12');
+        sidebar.parentElement.classList.remove('grid-cols-1');
+      }
     }
   }
 
-  const res = await BBTApi.saveTeamProfile({
-    token,
-    team_id: tid,
-    intro,
-    contact_name: contact,
-    contact_phone: phone,
-    logo_url: logoPath,
-    logo_path: logoPath
+  // --- 4. 批次匯入帳號與大批入隊 ---
+  function ensureBatchImportAccountsModal_() {
+    if (document.getElementById('batchImportAccountsModal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'batchImportAccountsModal';
+    modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-3';
+    modal.innerHTML = `
+      <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
+          <div class="font-black text-sm flex items-center gap-2">
+            <i data-lucide="users" class="w-4 h-4 text-emerald-400"></i>
+            <span>批次匯入帳號</span>
+          </div>
+          <button type="button" onclick="closeBatchImportAccountsModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1">✕</button>
+        </div>
+        <div class="p-4 overflow-y-auto space-y-3 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">預設指派球隊（可留空）</label>
+              <select id="batchAccDefaultTeam" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800"></select>
+            </div>
+            <div class="flex items-end pb-1">
+              <label class="flex items-center gap-2 cursor-pointer select-none">
+                <input id="batchAccEnrollTeam" type="checkbox" checked class="w-4 h-4 rounded text-emerald-600 border-slate-300">
+                <span class="font-bold text-slate-700">若已選球隊，同步登錄為該隊名單</span>
+              </label>
+            </div>
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <label class="font-bold text-slate-700">貼上多行資料或選擇 CSV（格式：姓名,帳號,密碼,背號,守備,身分）</label>
+            <input id="batchAccCsvFile" type="file" accept=".csv,.txt" onchange="handleBatchAccCsvFile_(event)" class="text-[11px] text-slate-600">
+          </div>
+          <textarea id="batchAccRawText" rows="5" placeholder="範例：\n王大明,wangdm,1234,12,SS,player\n林志豪,linzh,1234,8,OF,player" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-[11px] focus:outline-none focus:border-emerald-500"></textarea>
+          <div class="flex items-center justify-between">
+            <button type="button" onclick="previewBatchAccounts_()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black">解析預覽</button>
+            <span id="batchAccPreviewCount" class="text-[11px] font-bold text-slate-500">尚未解析</span>
+          </div>
+          <div id="batchAccPreviewBox" class="max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50 text-[11px] text-slate-600">
+            請輸入資料後點選「解析預覽」
+          </div>
+        </div>
+        <div class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
+          <button type="button" onclick="closeBatchImportAccountsModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200">取消</button>
+          <button type="button" id="btnSubmitBatchAccounts" onclick="submitBatchImportAccounts()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700">開始批次建立</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  let parsedBatchAccountsCache_ = [];
+
+  function parseBatchAccountLines_(rawText) {
+    const lines = String(rawText || '')
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean);
+
+    return lines.map((line, idx) => {
+      const parts = line.split(/[,\t]/).map(s => s.trim());
+      return {
+        rowIndex: idx + 1,
+        player_name: parts[0] || '',
+        account: parts[1] || '',
+        password: parts[2] || '',
+        number: parts[3] || '',
+        position: parts[4] || '',
+        role_type: parts[5] || 'player',
+        valid: Boolean(parts[0] || parts[1])
+      };
+    });
+  }
+
+  window.handleBatchAccCsvFile_ = function (evt) {
+    const file = evt?.target?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const ta = document.getElementById('batchAccRawText');
+      if (ta) ta.value = String(e.target?.result || '');
+      window.previewBatchAccounts_();
+    };
+    reader.readAsText(file, 'utf-8');
+  };
+
+  window.previewBatchAccounts_ = function () {
+    const raw = document.getElementById('batchAccRawText')?.value || '';
+    const rows = parseBatchAccountLines_(raw);
+    parsedBatchAccountsCache_ = rows;
+    const validRows = rows.filter(r => r.valid);
+    const countEl = document.getElementById('batchAccPreviewCount');
+    const boxEl = document.getElementById('batchAccPreviewBox');
+    if (countEl) countEl.innerText = `共 ${rows.length} 列（有效 ${validRows.length} 列）`;
+    if (!boxEl) return;
+
+    if (rows.length === 0) {
+      boxEl.innerHTML = '<div class="text-slate-400 text-center py-2">無資料</div>';
+      return;
+    }
+
+    boxEl.innerHTML = rows.map(r => `
+      <div class="py-1 px-2 border-b last:border-b-0 border-slate-200/70 flex items-center justify-between gap-2 ${r.valid ? '' : 'bg-rose-50 text-rose-700'}">
+        <span>#${r.rowIndex} <strong>${r.player_name || '(未填姓名)'}</strong> · 帳號: ${r.account || '(自動產生)'} · #${r.number || '—'} · ${r.position || '—'}</span>
+        <span class="font-bold">${r.valid ? '可匯入' : '資料不完整'}</span>
+      </div>
+    `).join('');
+  };
+
+  window.openBatchImportAccountsModal = function () {
+    ensureBatchImportAccountsModal_();
+    parsedBatchAccountsCache_ = [];
+    const sel = document.getElementById('batchAccDefaultTeam');
+    if (sel) {
+      const teams = window.globalData?.teams || [];
+      sel.innerHTML = `<option value="">-- 僅建立帳號，暫不指定球隊 --</option>` + teams.map(t =>
+        `<option value="${t.team_id}">${t.team_name} (${t.division || ''})</option>`
+      ).join('');
+      const curTid = window.currentSelectedTeamId || currentSelectedTeamId || '';
+      if (curTid) sel.value = curTid;
+    }
+    const ta = document.getElementById('batchAccRawText');
+    if (ta) ta.value = '';
+    const box = document.getElementById('batchAccPreviewBox');
+    if (box) box.innerHTML = '請輸入資料後點選「解析預覽」';
+    const cnt = document.getElementById('batchAccPreviewCount');
+    if (cnt) cnt.innerText = '尚未解析';
+
+    const modal = document.getElementById('batchImportAccountsModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  };
+
+  window.closeBatchImportAccountsModal = function () {
+    const modal = document.getElementById('batchImportAccountsModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  };
+
+  window.submitBatchImportAccounts = async function () {
+    const token = getActiveAuthToken_();
+    if (!token) {
+      alert('⚠️ 尚未取得登入憑證，請先重新登入後再執行批次建立');
+      return;
+    }
+
+    const raw = document.getElementById('batchAccRawText')?.value || '';
+    const rows = (parsedBatchAccountsCache_.length > 0 ? parsedBatchAccountsCache_ : parseBatchAccountLines_(raw))
+      .filter(r => r.valid);
+
+    if (rows.length === 0) {
+      alert('請先輸入至少一筆有效的帳號資料');
+      return;
+    }
+
+    const defaultTeamId = String(document.getElementById('batchAccDefaultTeam')?.value || '').trim();
+    const enrollTeam = Boolean(document.getElementById('batchAccEnrollTeam')?.checked) && Boolean(defaultTeamId);
+
+    const btn = document.getElementById('btnSubmitBatchAccounts');
+    if (btn) btn.disabled = true;
+
+    try {
+      if (typeof callApi === 'function') {
+        const batchRes = await callApi('batchCreateUserAccounts', {
+          token,
+          batch_id: `BATCH-${Date.now()}`,
+          team_id: defaultTeamId,
+          enroll_in_roster: enrollTeam,
+          accounts: rows
+        });
+        if (batchRes && batchRes.result === 'ok') {
+          alert(`✅ 批次建帳完成：成功 ${batchRes.success_count || 0} 筆${batchRes.error_count > 0 ? `，失敗 ${batchRes.error_count} 筆` : ''}`);
+          window.closeBatchImportAccountsModal();
+          if (typeof initSystem === 'function') await initSystem();
+          return;
+        }
+      }
+
+      let okCount = 0;
+      let failCount = 0;
+      for (const r of rows) {
+        const res = await BBTApi.createUserAccount({
+          token,
+          player_name: r.player_name,
+          ...(r.account ? { account: r.account } : {}),
+          ...(r.password ? { password: r.password } : {}),
+          team_id: defaultTeamId,
+          number: r.number,
+          role_level: 'player',
+          role_type: r.role_type || 'player',
+          position: r.position,
+          enroll_in_roster: enrollTeam,
+          is_active: true
+        });
+        if (res && res.result === 'ok') {
+          okCount++;
+        } else {
+          failCount++;
+        }
+      }
+
+      alert(`✅ 批次建帳完成：成功 ${okCount} 筆${failCount > 0 ? `，失敗 ${failCount} 筆` : ''}`);
+      window.closeBatchImportAccountsModal();
+      if (typeof initSystem === 'function') await initSystem();
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  function ensureBatchEnrollPlayersModal_() {
+    if (document.getElementById('batchEnrollPlayersModal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'batchEnrollPlayersModal';
+    modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-3';
+    modal.innerHTML = `
+      <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
+          <div class="font-black text-sm flex items-center gap-2">
+            <i data-lucide="user-plus" class="w-4 h-4 text-emerald-400"></i>
+            <span>大批選擇已建帳號入隊</span>
+          </div>
+          <button type="button" onclick="closeBatchEnrollPlayersModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1">✕</button>
+        </div>
+        <div class="p-4 overflow-y-auto space-y-3 text-xs">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <input id="batchEnrollSearchInput" type="text" oninput="renderBatchEnrollCandidateList_()" placeholder="搜尋姓名、帳號或代號..." class="flex-1 min-w-[180px] px-3 py-1.5 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500">
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="toggleAllBatchEnrollChecks_(true)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700">全選</button>
+              <button type="button" onclick="toggleAllBatchEnrollChecks_(false)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700">全不選</button>
+            </div>
+          </div>
+          <div id="batchEnrollCandidateList" class="max-h-64 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl bg-slate-50/50"></div>
+        </div>
+        <div class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
+          <button type="button" onclick="closeBatchEnrollPlayersModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200">取消</button>
+          <button type="button" id="btnSubmitBatchEnroll" onclick="submitBatchEnrollPlayers()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700">確認批次入隊</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  function getAvailableCandidatesForTeam_(teamId) {
+    const targetTeamId = String(teamId || '').trim();
+    const allUsers = window.globalData?.users || [];
+    const allRoster = window.globalData?.roster || [];
+
+    const enrolledIds = new Set();
+    const activeOtherTeamIds = new Set();
+
+    allRoster.forEach(r => {
+      const uid = String(r.user_id || '').trim();
+      const rTid = String(r.team_id || '').trim();
+      if (!uid) return;
+      const inactive = typeof isInactiveRosterStatus_ === 'function' ? isInactiveRosterStatus_(r.status) : false;
+      if (rTid === targetTeamId && !inactive) {
+        enrolledIds.add(uid);
+      } else if (rTid && rTid !== targetTeamId && !inactive) {
+        activeOtherTeamIds.add(uid);
+      }
+    });
+
+    return allUsers.filter(u => {
+      const uid = String(u.user_id || '').trim();
+      if (!uid || enrolledIds.has(uid)) return false;
+      if (typeof isSystemAdminAccount === 'function' && isSystemAdminAccount(u)) return false;
+      const active =
+        u.is_active === true ||
+        u.is_active === undefined ||
+        String(u.is_active).toUpperCase() === 'TRUE' ||
+        String(u.is_active) === '1';
+      if (!active) return false;
+      if (activeOtherTeamIds.has(uid)) {
+        return typeof isApprovedFaToTargetTeam_ === 'function'
+          ? isApprovedFaToTargetTeam_(uid, targetTeamId)
+          : false;
+      }
+      return true;
+    });
+  }
+
+  window.renderBatchEnrollCandidateList_ = function () {
+    const container = document.getElementById('batchEnrollCandidateList');
+    if (!container) return;
+    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
+    const kw = String(document.getElementById('batchEnrollSearchInput')?.value || '').trim().toLowerCase();
+
+    const list = getAvailableCandidatesForTeam_(tid).filter(u => {
+      if (!kw) return true;
+      const hay = `${u.player_name || ''} ${u.account || ''} ${u.user_id || ''}`.toLowerCase();
+      return hay.includes(kw);
+    });
+
+    if (list.length === 0) {
+      container.innerHTML = `<div class="p-4 text-center text-slate-400">目前無可批次入隊的帳號</div>`;
+      return;
+    }
+
+    container.innerHTML = list.map(u => {
+      const uid = String(u.user_id || '').trim();
+      const name = u.player_name || u.account || uid;
+      return `
+        <div class="p-2.5 flex items-center justify-between gap-2 bg-white hover:bg-slate-50">
+          <label class="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1">
+            <input type="checkbox" name="batchEnrollUserCb" value="${uid}" class="w-4 h-4 rounded text-emerald-600 border-slate-300">
+            <div class="truncate">
+              <span class="font-black text-slate-900">${name}</span>
+              <span class="ml-1.5 text-[11px] text-slate-400">(${uid} · ${u.account || ''})</span>
+            </div>
+          </label>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <input type="text" data-enroll-num="${uid}" placeholder="背號" class="w-14 px-2 py-1 rounded-lg border border-slate-200 text-center text-[11px]">
+            <input type="text" data-enroll-pos="${uid}" value="${u.position || ''}" placeholder="守備" class="w-16 px-2 py-1 rounded-lg border border-slate-200 text-center text-[11px]">
+          </div>
+        </div>
+      `;
+    }).join('');
+  };
+
+  window.toggleAllBatchEnrollChecks_ = function (checked) {
+    document.querySelectorAll('input[name="batchEnrollUserCb"]').forEach(cb => {
+      cb.checked = Boolean(checked);
+    });
+  };
+
+  window.openBatchEnrollPlayersModal = function () {
+    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
+    if (!tid) {
+      alert('請先選擇目標球隊');
+      return;
+    }
+    ensureBatchEnrollPlayersModal_();
+    const searchEl = document.getElementById('batchEnrollSearchInput');
+    if (searchEl) searchEl.value = '';
+    window.renderBatchEnrollCandidateList_();
+    const modal = document.getElementById('batchEnrollPlayersModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  };
+
+  window.closeBatchEnrollPlayersModal = function () {
+    const modal = document.getElementById('batchEnrollPlayersModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  };
+
+  window.submitBatchEnrollPlayers = async function () {
+    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
+    if (!tid) return;
+
+    const token = getActiveAuthToken_();
+    if (!token) {
+      alert('⚠️ 尚未取得登入憑證，請先重新登入後再執行批次入隊');
+      return;
+    }
+
+    const checked = Array.from(document.querySelectorAll('input[name="batchEnrollUserCb"]:checked'));
+    if (checked.length === 0) {
+      alert('請至少勾選一位要入隊的球員');
+      return;
+    }
+
+    const btn = document.getElementById('btnSubmitBatchEnroll');
+    if (btn) btn.disabled = true;
+
+    const playersPayload = checked.map(cb => {
+      const uid = String(cb.value || '').trim();
+      const u = (window.globalData?.users || []).find(item => String(item.user_id).trim() === uid) || {};
+      const numVal = document.querySelector(`input[data-enroll-num="${uid}"]`)?.value.trim() || '';
+      const posVal = document.querySelector(`input[data-enroll-pos="${uid}"]`)?.value.trim() || u.position || '';
+      return {
+        user_id: uid,
+        player_name: u.player_name || u.account || uid,
+        number: numVal,
+        role_type: u.role_type || 'player',
+        position: posVal,
+        bat_throw: u.bat_throw || '',
+        phone: u.phone || ''
+      };
+    });
+
+    try {
+      if (typeof callApi === 'function') {
+        const batchRes = await callApi('batchEnrollTeamRoster', {
+          token,
+          team_id: tid,
+          players: playersPayload
+        });
+        if (batchRes && batchRes.result === 'ok') {
+          alert(`✅ 已批次將 ${batchRes.enrolled_count || playersPayload.length} 位球員登錄至本隊！`);
+          window.closeBatchEnrollPlayersModal();
+          if (typeof initSystem === 'function') await initSystem();
+          return;
+        }
+      }
+
+      let okCount = 0;
+      for (const p of playersPayload) {
+        const res = await BBTApi.saveRoster({
+          token,
+          team_id: tid,
+          ...p,
+          status: 'approved'
+        });
+        if (res && res.result === 'ok') okCount++;
+      }
+
+      alert(`✅ 已批次將 ${okCount} 位球員登錄至本隊！`);
+      window.closeBatchEnrollPlayersModal();
+      if (typeof initSystem === 'function') await initSystem();
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  function injectBatchTriggerButtons_() {
+    renameTeamIntroButton_();
+
+    const singleEnrollBtn = Array.from(document.querySelectorAll('button')).find(
+      b => String(b.getAttribute('onclick') || '').includes('openEnrollExistingModal')
+    );
+    if (singleEnrollBtn && !document.getElementById('btnOpenBatchEnrollPlayers')) {
+      const batchBtn = document.createElement('button');
+      batchBtn.type = 'button';
+      batchBtn.id = 'btnOpenBatchEnrollPlayers';
+      batchBtn.onclick = window.openBatchEnrollPlayersModal;
+      batchBtn.className = 'bg-slate-800 hover:bg-slate-900 text-white text-xs font-black px-3 py-2 rounded-xl shadow-sm transition flex items-center gap-1 whitespace-nowrap shrink-0';
+      batchBtn.innerHTML = `<i data-lucide="user-plus" class="w-3.5 h-3.5 text-emerald-400"></i><span>大批入隊</span>`;
+      singleEnrollBtn.parentElement?.insertBefore(batchBtn, singleEnrollBtn.nextSibling);
+    }
+
+    const createAccBtn = Array.from(document.querySelectorAll('button')).find(
+      b => String(b.getAttribute('onclick') || '').includes('openCreateAccountModal')
+    );
+    if (createAccBtn && !document.getElementById('btnOpenBatchImportAccounts')) {
+      const batchAccBtn = document.createElement('button');
+      batchAccBtn.type = 'button';
+      batchAccBtn.id = 'btnOpenBatchImportAccounts';
+      batchAccBtn.onclick = window.openBatchImportAccountsModal;
+      batchAccBtn.className = 'px-2.5 py-1 text-[11px] font-bold rounded-lg gap-1 whitespace-nowrap shrink-0 bg-emerald-700/80 hover:bg-emerald-700 text-white border border-emerald-500/40 transition flex items-center';
+      batchAccBtn.innerHTML = `<i data-lucide="upload" class="w-3.5 h-3.5"></i><span>批次建帳</span>`;
+      createAccBtn.parentElement?.insertBefore(batchAccBtn, createAccBtn.nextSibling);
+    }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function runLayoutSync_() {
+    moveFiltersToLeftSidebar_();
+    ensureSidebarStaysVisible_();
+    injectBatchTriggerButtons_();
+    refreshRightPanelLogo_();
+  }
+
+  const origRenderOverview = window.renderOverviewKpiBoard;
+  if (typeof origRenderOverview === 'function' && !origRenderOverview.__unifiedHooked) {
+    window.renderOverviewKpiBoard = function (...args) {
+      const res = origRenderOverview.apply(this, args);
+      runLayoutSync_();
+      return res;
+    };
+    window.renderOverviewKpiBoard.__unifiedHooked = true;
+  }
+
+  const origSelectTeam = window.selectTeam;
+  if (typeof origSelectTeam === 'function' && !origSelectTeam.__unifiedHooked) {
+    window.selectTeam = function (...args) {
+      const res = origSelectTeam.apply(this, args);
+      runLayoutSync_();
+      return res;
+    };
+    window.selectTeam.__unifiedHooked = true;
+  }
+
+  const observer = new MutationObserver(() => {
+    moveFiltersToLeftSidebar_();
+    ensureSidebarStaysVisible_();
   });
 
-  if (res && res.result === 'ok') {
-    const teamObj = (window.globalData?.teams || []).find(t => String(t.team_id) === tid);
-    if (teamObj) {
-      teamObj.intro = intro;
-      teamObj.contact_name = contact;
-      teamObj.contact_phone = phone;
-      teamObj.logo_url = logoPath;
+  function startUnified_() {
+    runLayoutSync_();
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
     }
-    alert('✅ 球隊簡介與隊徽設定已儲存！');
-    if (typeof closeTeamProfileModal === 'function') closeTeamProfileModal();
-    if (typeof initSystem === 'function') await initSystem();
-  } else {
-    alert('❌ 儲存失敗: ' + (res && res.message ? res.message : ''));
   }
-};
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startUnified_, { once: true });
+  } else {
+    startUnified_();
+  }
+})();
 
 async function submitAnnouncement() {
   const category = document.getElementById('annCategory').value;
@@ -4067,1118 +5003,5 @@ function renderTeamSeasonHistoryTab() {
     document.addEventListener('DOMContentLoaded', runBoot, { once: true });
   } else {
     runBoot();
-  }
-})();
-
-// ============================================================================
-// 工具列與總覽版面緊湊化（縮小管理按鈕框框與上方控制列高度）
-// ============================================================================
-function compactToolbarAndOverviewLayout_() {
-  // 1. 縮小頂部深色工具列與按鈕框框
-  const headerEl = document.querySelector('header');
-  if (headerEl) {
-    headerEl.classList.remove('py-4', 'py-5', 'p-4', 'p-5');
-    headerEl.classList.add('py-2.5', 'px-3');
-  }
-
-  const adminRow = document.getElementById('headerAdminRow');
-  if (adminRow) {
-    adminRow.classList.remove('gap-2.5', 'gap-3', 'mt-3', 'pt-3');
-    adminRow.classList.add('flex-wrap', 'gap-1.5', 'mt-2', 'pt-2');
-
-    adminRow.querySelectorAll('button, a').forEach(btn => {
-      btn.classList.remove(
-        'px-4', 'px-5', 'py-2', 'py-2.5', 'py-3',
-        'text-xs', 'text-sm', 'rounded-xl', 'rounded-2xl', 'gap-2'
-      );
-      btn.classList.add(
-        'px-2.5', 'py-1', 'text-[11px]', 'font-bold',
-        'rounded-lg', 'gap-1', 'whitespace-nowrap', 'shrink-0'
-      );
-      const svg = btn.querySelector('svg, i');
-      if (svg) {
-        svg.classList.remove('w-4', 'h-4', 'w-5', 'h-5');
-        svg.classList.add('w-3.5', 'h-3.5');
-      }
-    });
-  }
-
-  // 2. 縮小組別膠囊與球季下拉選單的框框高度
-  const divGroup = document.getElementById('divisionSwitchGroup');
-  if (divGroup) {
-    divGroup.classList.remove('p-1.5', 'gap-1.5');
-    divGroup.classList.add('p-1', 'gap-1');
-    divGroup.querySelectorAll('button').forEach(b => {
-      b.classList.remove('px-4', 'px-3.5', 'py-2', 'py-1.5', 'text-sm');
-      b.classList.add('px-2.5', 'py-1', 'text-xs');
-    });
-  }
-
-  const seasonSelect = document.getElementById('seasonSelect');
-  if (seasonSelect) {
-    seasonSelect.classList.remove('py-2', 'py-2.5', 'px-3.5', 'text-sm');
-    seasonSelect.classList.add('py-1', 'px-2.5', 'text-xs', 'rounded-lg');
-  }
-
-  const btnKpiCreate = document.getElementById('btnKpiCreateTeam');
-  if (btnKpiCreate) {
-    btnKpiCreate.classList.remove('px-4', 'px-3.5', 'py-2', 'py-2.5', 'text-sm');
-    btnKpiCreate.classList.add('px-3', 'py-1.5', 'text-xs', 'rounded-lg');
-  }
-
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-// 掛鉤到既有版面更新流程，確保每次重繪都維持緊湊樣式
-(function hookCompactLayout_() {
-  if (typeof syncPersonalHeaderAndLayout_ === 'function' && !syncPersonalHeaderAndLayout_.__compacted) {
-    const origSync = syncPersonalHeaderAndLayout_;
-    syncPersonalHeaderAndLayout_ = function (...args) {
-      const res = origSync.apply(this, args);
-      compactToolbarAndOverviewLayout_();
-      return res;
-    };
-    syncPersonalHeaderAndLayout_.__compacted = true;
-  }
-
-  if (typeof renderOverviewKpiBoard === 'function' && !renderOverviewKpiBoard.__compacted) {
-    const origKpi = renderOverviewKpiBoard;
-    renderOverviewKpiBoard = function (...args) {
-      const res = origKpi.apply(this, args);
-      compactToolbarAndOverviewLayout_();
-      return res;
-    };
-    renderOverviewKpiBoard.__compacted = true;
-  }
-})();
-
-(function patchTeamLogoRenderer_() {
-  const origBuildLogo = window.buildTeamLogoHtml;
-
-  window.buildTeamLogoHtml = function (team, sizeClass = 'w-10 h-10 text-sm') {
-    const t = team || {};
-    const rawUrl = String(t.logo_url || t.logo_path || '').trim();
-    const normalizedUrl = rawUrl.startsWith('/img/') ? rawUrl.slice(1) : rawUrl;
-    const fallbackText = String(t.team_name || t.team_id || '?').trim().slice(0, 1) || '?';
-
-    if (normalizedUrl) {
-      return `
-        <span class="relative inline-flex items-center justify-center ${sizeClass} rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
-          <img
-            src="${normalizedUrl}"
-            alt="${String(t.team_name || '隊徽')}"
-            class="w-full h-full object-cover"
-            onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
-          />
-          <span class="hidden w-full h-full items-center justify-center bg-emerald-600 text-white font-black">${fallbackText}</span>
-        </span>
-      `;
-    }
-
-    if (typeof origBuildLogo === 'function') {
-      return origBuildLogo(team, sizeClass);
-    }
-    return `<span class="inline-flex items-center justify-center ${sizeClass} rounded-xl bg-emerald-600 text-white font-black shrink-0">${fallbackText}</span>`;
-  };
-})();
-
-// ============================================================================
-// BBT 球隊簡介維護、隊徽路徑設定（GitHub img/）、批次匯入帳號與大批入隊完整模組
-// ============================================================================
-(function initBBTTeamLogoAndBatchModule_() {
-  function getActiveAuthToken_() {
-    const candidates = [
-      window.authToken,
-      window.currentToken,
-      window.currentUser && window.currentUser.token,
-      sessionStorage.getItem('bbt_auth_token'),
-      sessionStorage.getItem('token'),
-      localStorage.getItem('bbt_auth_token'),
-      localStorage.getItem('token')
-    ];
-    for (const val of candidates) {
-      if (typeof val === 'string' && val.trim()) {
-        return val.trim();
-      }
-    }
-    return '';
-  }
-
-  function normalizeGitHubLogoPath_(rawPath, teamId) {
-    const clean = String(rawPath || '').trim();
-    if (!clean) {
-      return teamId ? `img/${teamId}.png` : '';
-    }
-    // 將開頭的 /img/ 轉為相對路徑 img/，避免 GitHub Pages 子路徑 404
-    if (clean.startsWith('/img/')) {
-      return clean.slice(1);
-    }
-    return clean;
-  }
-
-  // --- 1. 隊徽渲染器（支援 GitHub img/ 相對路徑，無圖或 404 時自動退回文字方塊） ---
-  const origBuildTeamLogoHtml = window.buildTeamLogoHtml;
-  window.buildTeamLogoHtml = function (team, sizeClass = 'w-10 h-10 text-sm') {
-    const t = team || {};
-    const tid = String(t.team_id || '').trim();
-    const rawUrl = String(t.logo_url || t.logo_path || '').trim();
-    const normalizedUrl = normalizeGitHubLogoPath_(rawUrl, '');
-    const fallbackText = String(t.team_name || tid || '?').trim().slice(0, 1) || '?';
-
-    if (normalizedUrl) {
-      return `
-        <span class="relative inline-flex items-center justify-center ${sizeClass} rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
-          <img
-            src="${normalizedUrl}"
-            alt="${String(t.team_name || '隊徽')}"
-            class="w-full h-full object-cover"
-            onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
-          />
-          <span class="hidden w-full h-full items-center justify-center bg-emerald-600 text-white font-black">${fallbackText}</span>
-        </span>
-      `;
-    }
-
-    if (typeof origBuildTeamLogoHtml === 'function') {
-      return origBuildTeamLogoHtml(team, sizeClass);
-    }
-    return `<span class="inline-flex items-center justify-center ${sizeClass} rounded-xl bg-emerald-600 text-white font-black shrink-0">${fallbackText}</span>`;
-  };
-
-  // --- 2. 球隊簡介維護與隊徽設定（GitHub img/ 目錄對應） ---
-  function renameTeamIntroButton_() {
-    document.querySelectorAll('button').forEach(btn => {
-      const txt = String(btn.textContent || '').replace(/\s+/g, '').trim();
-      if (txt.includes('隊服與介紹維護') || txt.includes('球隊簡介維護')) {
-        btn.classList.add('whitespace-nowrap', 'inline-flex', 'items-center', 'gap-1.5', 'shrink-0');
-        btn.innerHTML = `<i data-lucide="file-text" class="w-3.5 h-3.5 shrink-0"></i><span>球隊簡介維護</span>`;
-      }
-    });
-  }
-
-  function ensureTeamIntroAndLogoModal_() {
-    let modal = document.getElementById('teamProfileModal');
-    if (!modal) {
-      modal = document.createElement('div');
-      modal.id = 'teamProfileModal';
-      modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-3';
-      document.body.appendChild(modal);
-    }
-
-    if (!document.getElementById('editTeamLogoPath')) {
-      modal.innerHTML = `
-        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
-          <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
-            <div class="font-black text-sm flex items-center gap-2">
-              <i data-lucide="image" class="w-4 h-4 text-emerald-400"></i>
-              <span>球隊簡介維護與隊徽設定</span>
-            </div>
-            <button type="button" onclick="closeTeamProfileModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1">✕</button>
-          </div>
-          <div class="p-4 overflow-y-auto space-y-3 text-xs">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">球隊簡介</label>
-              <textarea id="editTeamIntro" rows="3" placeholder="請輸入球隊簡介..." class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500"></textarea>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">球隊聯絡窗口</label>
-                <input id="editTeamContact" type="text" class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500">
-              </div>
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">聯絡電話</label>
-                <input id="editTeamPhone" type="text" class="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500">
-              </div>
-            </div>
-            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
-              <div class="flex items-center justify-between gap-2">
-                <span class="font-black text-slate-800">隊徽路徑設定（GitHub 專案 img/ 資料夾）</span>
-                <span id="teamLogoTargetPathHint" class="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">img/</span>
-              </div>
-              <div class="flex items-center gap-3">
-                <img id="editTeamLogoPreview" src="" alt="隊徽預覽" class="w-14 h-14 rounded-xl object-cover border border-slate-200 bg-white hidden">
-                <div class="flex-1 space-y-1.5">
-                  <input id="editTeamLogoFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="handleTeamLogoFileChange_(event)" class="block w-full text-[11px] text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
-                  <input id="editTeamLogoPath" type="text" oninput="syncLogoPathHint_(this.value)" placeholder="img/BBT-T001.png" class="w-full px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-mono text-slate-700 focus:outline-none focus:border-emerald-500">
-                </div>
-              </div>
-              <p class="text-[11px] text-slate-500 leading-relaxed">
-                請將隊徽圖檔命名為上方路徑檔名並放入 GitHub 專案的 <code class="font-mono text-slate-700">img/</code> 資料夾；若尚未放圖，畫面會自動顯示隊名首字方塊。
-              </p>
-            </div>
-          </div>
-          <div class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
-            <button type="button" onclick="closeTeamProfileModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-100">取消</button>
-            <button type="button" onclick="saveCurrentTeamProfile()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700">儲存簡介與隊徽設定</button>
-          </div>
-        </div>
-      `;
-    }
-  }
-
-  window.syncLogoPathHint_ = function (val) {
-    const clean = String(val || '').trim();
-    const hintEl = document.getElementById('teamLogoTargetPathHint');
-    if (hintEl) hintEl.innerText = clean || 'img/';
-  };
-
-let pendingLogoUploadData_ = null;
-
-window.handleTeamLogoFileChange_ = function (evt) {
-  const file = evt?.target?.files?.[0];
-  const teamId = String(window.currentSelectedTeamId || currentSelectedTeamId || 'team').trim();
-  if (!file) {
-    pendingLogoUploadData_ = null;
-    return;
-  }
-
-  if (file.size > 2 * 1024 * 1024) {
-    alert('⚠️ 隊徽檔案超過 2MB，建議壓縮後再上傳以加快載入速度');
-  }
-
-  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
-  const fileName = `${teamId}.${ext}`;
-  const pathInput = document.getElementById('editTeamLogoPath');
-  if (pathInput) pathInput.value = `Drive/${fileName}`;
-  if (typeof window.syncLogoPathHint_ === 'function') {
-    window.syncLogoPathHint_(`Drive/${fileName}`);
-  }
-
-  const reader = new FileReader();
-  reader.onload = function (e) {
-    const dataUrl = String(e.target?.result || '');
-    const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
-    pendingLogoUploadData_ = {
-      fileName,
-      mimeType: file.type || 'image/png',
-      base64,
-      dataUrl
-    };
-
-    const previewEl = document.getElementById('editTeamLogoPreview');
-    if (previewEl && dataUrl) {
-      previewEl.src = dataUrl;
-      previewEl.classList.remove('hidden');
-    }
-  };
-  reader.readAsDataURL(file);
-};
-
-window.saveCurrentTeamProfile = async function () {
-  const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
-  if (!tid) return;
-
-  const token = getActiveAuthToken_();
-  if (!token) {
-    alert('⚠️ 尚未取得登入憑證，請先重新登入後再儲存');
-    return;
-  }
-
-  const intro = document.getElementById('editTeamIntro')?.value ?? '';
-  const contact = document.getElementById('editTeamContact')?.value ?? '';
-  const phone = document.getElementById('editTeamPhone')?.value ?? '';
-  let finalLogoUrl = String(document.getElementById('editTeamLogoPath')?.value || '').trim();
-
-  // 若有選擇新圖片，先上傳到 Google Drive 目錄
-  if (pendingLogoUploadData_ && pendingLogoUploadData_.base64 && typeof callApi === 'function') {
-    const uploadRes = await callApi('uploadTeamLogo', {
-      token,
-      team_id: tid,
-      file_name: pendingLogoUploadData_.fileName,
-      mime_type: pendingLogoUploadData_.mimeType,
-      base64: pendingLogoUploadData_.base64
-    });
-
-    if (!uploadRes || uploadRes.result !== 'ok') {
-      alert('❌ 隊徽上傳失敗: ' + (uploadRes && uploadRes.message ? uploadRes.message : ''));
-      return;
-    }
-    finalLogoUrl = uploadRes.logo_url || finalLogoUrl;
-  }
-
-  const res = await BBTApi.saveTeamProfile({
-    token,
-    team_id: tid,
-    intro,
-    contact_name: contact,
-    contact_phone: phone,
-    logo_url: finalLogoUrl,
-    logo_path: finalLogoUrl
-  });
-
-  if (res && res.result === 'ok') {
-    pendingLogoUploadData_ = null;
-    const teamObj = (window.globalData?.teams || []).find(t => String(t.team_id) === tid);
-    if (teamObj) {
-      teamObj.intro = intro;
-      teamObj.contact_name = contact;
-      teamObj.contact_phone = phone;
-      if (finalLogoUrl) teamObj.logo_url = finalLogoUrl;
-    }
-    alert('✅ 球隊簡介與隊徽已儲存並同步至 Google Drive！');
-    if (typeof window.closeTeamProfileModal === 'function') window.closeTeamProfileModal();
-    if (typeof initSystem === 'function') await initSystem();
-  } else {
-    alert('❌ 儲存失敗: ' + (res && res.message ? res.message : ''));
-  }
-};
-
-  const origOpenTeamProfileModal = window.openTeamProfileModal;
-  window.openTeamProfileModal = function () {
-    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
-    if (!tid) {
-      alert('請先選擇球隊');
-      return;
-    }
-    ensureTeamIntroAndLogoModal_();
-
-    const team = (window.globalData?.teams || []).find(t => String(t.team_id) === tid) || {};
-    const defaultLogoPath = normalizeGitHubLogoPath_(team.logo_url || team.logo_path, tid);
-
-    if (document.getElementById('editTeamIntro')) document.getElementById('editTeamIntro').value = team.intro || '';
-    if (document.getElementById('editTeamContact')) document.getElementById('editTeamContact').value = team.contact_name || '';
-    if (document.getElementById('editTeamPhone')) document.getElementById('editTeamPhone').value = team.contact_phone || '';
-    if (document.getElementById('editTeamLogoPath')) document.getElementById('editTeamLogoPath').value = defaultLogoPath;
-    if (document.getElementById('editTeamLogoFile')) document.getElementById('editTeamLogoFile').value = '';
-    window.syncLogoPathHint_(defaultLogoPath);
-
-    const previewEl = document.getElementById('editTeamLogoPreview');
-    if (previewEl) {
-      previewEl.src = defaultLogoPath;
-      previewEl.classList.remove('hidden');
-      previewEl.onerror = () => previewEl.classList.add('hidden');
-    }
-
-    if (typeof origOpenTeamProfileModal === 'function') {
-      origOpenTeamProfileModal();
-    } else {
-      const m = document.getElementById('teamProfileModal');
-      m.classList.remove('hidden');
-      m.classList.add('flex');
-    }
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  };
-
-  window.closeTeamProfileModal = function () {
-    const m = document.getElementById('teamProfileModal');
-    if (!m) return;
-    m.classList.add('hidden');
-    m.classList.remove('flex');
-  };
-
-  window.saveCurrentTeamProfile = async function () {
-    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
-    if (!tid) return;
-
-    const token = getActiveAuthToken_();
-    if (!token) {
-      alert('⚠️ 尚未取得登入憑證，請先重新登入後再儲存');
-      return;
-    }
-
-    const intro = document.getElementById('editTeamIntro')?.value ?? '';
-    const contact = document.getElementById('editTeamContact')?.value ?? '';
-    const phone = document.getElementById('editTeamPhone')?.value ?? '';
-    const rawLogoInput = document.getElementById('editTeamLogoPath')?.value || `img/${tid}.png`;
-    const logoPath = normalizeGitHubLogoPath_(rawLogoInput, tid);
-
-    const res = await BBTApi.saveTeamProfile({
-      token,
-      team_id: tid,
-      intro,
-      contact_name: contact,
-      contact_phone: phone,
-      logo_url: logoPath,
-      logo_path: logoPath
-    });
-
-    if (res && res.result === 'ok') {
-      const teamObj = (window.globalData?.teams || []).find(t => String(t.team_id) === tid);
-      if (teamObj) {
-        teamObj.intro = intro;
-        teamObj.contact_name = contact;
-        teamObj.contact_phone = phone;
-        teamObj.logo_url = logoPath;
-      }
-      alert(`✅ 球隊簡介與隊徽路徑（${logoPath}）已儲存！`);
-      window.closeTeamProfileModal();
-      if (typeof initSystem === 'function') await initSystem();
-    } else {
-      alert('❌ 儲存失敗: ' + (res && res.message ? res.message : ''));
-    }
-  };
-
-  // --- 3. 批次匯入帳號功能 ---
-  function ensureBatchImportAccountsModal_() {
-    if (document.getElementById('batchImportAccountsModal')) return;
-    const modal = document.createElement('div');
-    modal.id = 'batchImportAccountsModal';
-    modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-3';
-    modal.innerHTML = `
-      <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
-        <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
-          <div class="font-black text-sm flex items-center gap-2">
-            <i data-lucide="users" class="w-4 h-4 text-emerald-400"></i>
-            <span>批次匯入帳號</span>
-          </div>
-          <button type="button" onclick="closeBatchImportAccountsModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1">✕</button>
-        </div>
-        <div class="p-4 overflow-y-auto space-y-3 text-xs">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">預設指派球隊（可留空）</label>
-              <select id="batchAccDefaultTeam" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800"></select>
-            </div>
-            <div class="flex items-end pb-1">
-              <label class="flex items-center gap-2 cursor-pointer select-none">
-                <input id="batchAccEnrollTeam" type="checkbox" checked class="w-4 h-4 rounded text-emerald-600 border-slate-300">
-                <span class="font-bold text-slate-700">若已選球隊，同步登錄為該隊名單</span>
-              </label>
-            </div>
-          </div>
-          <div class="flex items-center justify-between gap-2">
-            <label class="font-bold text-slate-700">貼上多行資料或選擇 CSV（格式：姓名,帳號,密碼,背號,守備,身分）</label>
-            <input id="batchAccCsvFile" type="file" accept=".csv,.txt" onchange="handleBatchAccCsvFile_(event)" class="text-[11px] text-slate-600">
-          </div>
-          <textarea id="batchAccRawText" rows="5" placeholder="範例：\n王大明,wangdm,1234,12,SS,player\n林志豪,linzh,1234,8,OF,player" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-[11px] focus:outline-none focus:border-emerald-500"></textarea>
-          <div class="flex items-center justify-between">
-            <button type="button" onclick="previewBatchAccounts_()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black">解析預覽</button>
-            <span id="batchAccPreviewCount" class="text-[11px] font-bold text-slate-500">尚未解析</span>
-          </div>
-          <div id="batchAccPreviewBox" class="max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-slate-50 text-[11px] text-slate-600">
-            請輸入資料後點選「解析預覽」
-          </div>
-        </div>
-        <div class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
-          <button type="button" onclick="closeBatchImportAccountsModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200">取消</button>
-          <button type="button" id="btnSubmitBatchAccounts" onclick="submitBatchImportAccounts()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700">開始批次建立</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-  }
-
-  let parsedBatchAccountsCache_ = [];
-
-  function parseBatchAccountLines_(rawText) {
-    const lines = String(rawText || '')
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(Boolean);
-
-    return lines.map((line, idx) => {
-      const parts = line.split(/[,\t]/).map(s => s.trim());
-      const player_name = parts[0] || '';
-      const account = parts[1] || '';
-      const password = parts[2] || '';
-      const number = parts[3] || '';
-      const position = parts[4] || '';
-      const role_type = parts[5] || 'player';
-      return {
-        rowIndex: idx + 1,
-        player_name,
-        account,
-        password,
-        number,
-        position,
-        role_type,
-        valid: Boolean(player_name || account)
-      };
-    });
-  }
-
-  window.handleBatchAccCsvFile_ = function (evt) {
-    const file = evt?.target?.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      const ta = document.getElementById('batchAccRawText');
-      if (ta) ta.value = String(e.target?.result || '');
-      window.previewBatchAccounts_();
-    };
-    reader.readAsText(file, 'utf-8');
-  };
-
-  window.previewBatchAccounts_ = function () {
-    const raw = document.getElementById('batchAccRawText')?.value || '';
-    const rows = parseBatchAccountLines_(raw);
-    parsedBatchAccountsCache_ = rows;
-    const validRows = rows.filter(r => r.valid);
-    const countEl = document.getElementById('batchAccPreviewCount');
-    const boxEl = document.getElementById('batchAccPreviewBox');
-    if (countEl) countEl.innerText = `共 ${rows.length} 列（有效 ${validRows.length} 列）`;
-    if (!boxEl) return;
-
-    if (rows.length === 0) {
-      boxEl.innerHTML = '<div class="text-slate-400 text-center py-2">無資料</div>';
-      return;
-    }
-
-    boxEl.innerHTML = rows.map(r => `
-      <div class="py-1 px-2 border-b last:border-b-0 border-slate-200/70 flex items-center justify-between gap-2 ${r.valid ? '' : 'bg-rose-50 text-rose-700'}">
-        <span>#${r.rowIndex} <strong>${r.player_name || '(未填姓名)'}</strong> · 帳號: ${r.account || '(自動產生)'} · #${r.number || '—'} · ${r.position || '—'}</span>
-        <span class="font-bold">${r.valid ? '可匯入' : '資料不完整'}</span>
-      </div>
-    `).join('');
-  };
-
-  window.openBatchImportAccountsModal = function () {
-    ensureBatchImportAccountsModal_();
-    parsedBatchAccountsCache_ = [];
-    const sel = document.getElementById('batchAccDefaultTeam');
-    if (sel) {
-      const teams = window.globalData?.teams || [];
-      sel.innerHTML = `<option value="">-- 僅建立帳號，暫不指定球隊 --</option>` + teams.map(t =>
-        `<option value="${t.team_id}">${t.team_name} (${t.division || ''})</option>`
-      ).join('');
-      const curTid = window.currentSelectedTeamId || currentSelectedTeamId || '';
-      if (curTid) sel.value = curTid;
-    }
-    const ta = document.getElementById('batchAccRawText');
-    if (ta) ta.value = '';
-    const box = document.getElementById('batchAccPreviewBox');
-    if (box) box.innerHTML = '請輸入資料後點選「解析預覽」';
-    const cnt = document.getElementById('batchAccPreviewCount');
-    if (cnt) cnt.innerText = '尚未解析';
-
-    const modal = document.getElementById('batchImportAccountsModal');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  };
-
-  window.closeBatchImportAccountsModal = function () {
-    const modal = document.getElementById('batchImportAccountsModal');
-    if (!modal) return;
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-  };
-
-  window.submitBatchImportAccounts = async function () {
-    const token = getActiveAuthToken_();
-    if (!token) {
-      alert('⚠️ 尚未取得登入憑證，請先重新登入後再執行批次建立');
-      return;
-    }
-
-    const raw = document.getElementById('batchAccRawText')?.value || '';
-    const rows = (parsedBatchAccountsCache_.length > 0 ? parsedBatchAccountsCache_ : parseBatchAccountLines_(raw))
-      .filter(r => r.valid);
-
-    if (rows.length === 0) {
-      alert('請先輸入至少一筆有效的帳號資料');
-      return;
-    }
-
-    const defaultTeamId = String(document.getElementById('batchAccDefaultTeam')?.value || '').trim();
-    const enrollTeam = Boolean(document.getElementById('batchAccEnrollTeam')?.checked) && Boolean(defaultTeamId);
-
-    const btn = document.getElementById('btnSubmitBatchAccounts');
-    if (btn) btn.disabled = true;
-
-    try {
-      if (typeof callApi === 'function') {
-        const batchRes = await callApi('batchCreateUserAccounts', {
-          token,
-          batch_id: `BATCH-${Date.now()}`,
-          team_id: defaultTeamId,
-          enroll_in_roster: enrollTeam,
-          accounts: rows
-        });
-        if (batchRes && batchRes.result === 'ok') {
-          alert(`✅ 批次建帳完成：成功 ${batchRes.success_count || 0} 筆${batchRes.error_count > 0 ? `，失敗 ${batchRes.error_count} 筆` : ''}`);
-          window.closeBatchImportAccountsModal();
-          if (typeof initSystem === 'function') await initSystem();
-          return;
-        }
-      }
-
-      let okCount = 0;
-      let failCount = 0;
-      for (const r of rows) {
-        const res = await BBTApi.createUserAccount({
-          token,
-          player_name: r.player_name,
-          ...(r.account ? { account: r.account } : {}),
-          ...(r.password ? { password: r.password } : {}),
-          team_id: defaultTeamId,
-          number: r.number,
-          role_level: 'player',
-          role_type: r.role_type || 'player',
-          position: r.position,
-          enroll_in_roster: enrollTeam,
-          is_active: true
-        });
-        if (res && res.result === 'ok') {
-          okCount++;
-        } else {
-          failCount++;
-        }
-      }
-
-      alert(`✅ 批次建帳完成：成功 ${okCount} 筆${failCount > 0 ? `，失敗 ${failCount} 筆` : ''}`);
-      window.closeBatchImportAccountsModal();
-      if (typeof initSystem === 'function') await initSystem();
-    } finally {
-      if (btn) btn.disabled = false;
-    }
-  };
-
-  // --- 4. 球隊大批選擇入隊球員功能 ---
-  function ensureBatchEnrollPlayersModal_() {
-    if (document.getElementById('batchEnrollPlayersModal')) return;
-    const modal = document.createElement('div');
-    modal.id = 'batchEnrollPlayersModal';
-    modal.className = 'fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-3';
-    modal.innerHTML = `
-      <div class="bg-white w-full max-w-xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
-        <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between shrink-0">
-          <div class="font-black text-sm flex items-center gap-2">
-            <i data-lucide="user-plus" class="w-4 h-4 text-emerald-400"></i>
-            <span>大批選擇已建帳號入隊</span>
-          </div>
-          <button type="button" onclick="closeBatchEnrollPlayersModal()" class="text-slate-400 hover:text-white text-xs font-bold px-2 py-1">✕</button>
-        </div>
-        <div class="p-4 overflow-y-auto space-y-3 text-xs">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <input id="batchEnrollSearchInput" type="text" oninput="renderBatchEnrollCandidateList_()" placeholder="搜尋姓名、帳號或代號..." class="flex-1 min-w-[180px] px-3 py-1.5 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500">
-            <div class="flex items-center gap-1.5">
-              <button type="button" onclick="toggleAllBatchEnrollChecks_(true)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700">全選</button>
-              <button type="button" onclick="toggleAllBatchEnrollChecks_(false)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700">全不選</button>
-            </div>
-          </div>
-          <div id="batchEnrollCandidateList" class="max-h-64 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl bg-slate-50/50"></div>
-        </div>
-        <div class="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
-          <button type="button" onclick="closeBatchEnrollPlayersModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-white border border-slate-200">取消</button>
-          <button type="button" id="btnSubmitBatchEnroll" onclick="submitBatchEnrollPlayers()" class="px-4 py-2 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700">確認批次入隊</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-  }
-
-  function getAvailableCandidatesForTeam_(teamId) {
-    const targetTeamId = String(teamId || '').trim();
-    const allUsers = window.globalData?.users || [];
-    const allRoster = window.globalData?.roster || [];
-
-    const enrolledIds = new Set();
-    const activeOtherTeamIds = new Set();
-
-    allRoster.forEach(r => {
-      const uid = String(r.user_id || '').trim();
-      const rTid = String(r.team_id || '').trim();
-      if (!uid) return;
-      const inactive = typeof isInactiveRosterStatus_ === 'function' ? isInactiveRosterStatus_(r.status) : false;
-      if (rTid === targetTeamId && !inactive) {
-        enrolledIds.add(uid);
-      } else if (rTid && rTid !== targetTeamId && !inactive) {
-        activeOtherTeamIds.add(uid);
-      }
-    });
-
-    return allUsers.filter(u => {
-      const uid = String(u.user_id || '').trim();
-      if (!uid || enrolledIds.has(uid)) return false;
-      if (typeof isSystemAdminAccount === 'function' && isSystemAdminAccount(u)) return false;
-      const active =
-        u.is_active === true ||
-        u.is_active === undefined ||
-        String(u.is_active).toUpperCase() === 'TRUE' ||
-        String(u.is_active) === '1';
-      if (!active) return false;
-      if (activeOtherTeamIds.has(uid)) {
-        return typeof isApprovedFaToTargetTeam_ === 'function'
-          ? isApprovedFaToTargetTeam_(uid, targetTeamId)
-          : false;
-      }
-      return true;
-    });
-  }
-
-  window.renderBatchEnrollCandidateList_ = function () {
-    const container = document.getElementById('batchEnrollCandidateList');
-    if (!container) return;
-    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
-    const kw = String(document.getElementById('batchEnrollSearchInput')?.value || '').trim().toLowerCase();
-
-    const list = getAvailableCandidatesForTeam_(tid).filter(u => {
-      if (!kw) return true;
-      const hay = `${u.player_name || ''} ${u.account || ''} ${u.user_id || ''}`.toLowerCase();
-      return hay.includes(kw);
-    });
-
-    if (list.length === 0) {
-      container.innerHTML = `<div class="p-4 text-center text-slate-400">目前無可批次入隊的帳號</div>`;
-      return;
-    }
-
-    container.innerHTML = list.map(u => {
-      const uid = String(u.user_id || '').trim();
-      const name = u.player_name || u.account || uid;
-      return `
-        <div class="p-2.5 flex items-center justify-between gap-2 bg-white hover:bg-slate-50">
-          <label class="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1">
-            <input type="checkbox" name="batchEnrollUserCb" value="${uid}" class="w-4 h-4 rounded text-emerald-600 border-slate-300">
-            <div class="truncate">
-              <span class="font-black text-slate-900">${name}</span>
-              <span class="ml-1.5 text-[11px] text-slate-400">(${uid} · ${u.account || ''})</span>
-            </div>
-          </label>
-          <div class="flex items-center gap-1.5 shrink-0">
-            <input type="text" data-enroll-num="${uid}" placeholder="背號" class="w-14 px-2 py-1 rounded-lg border border-slate-200 text-center text-[11px]">
-            <input type="text" data-enroll-pos="${uid}" value="${u.position || ''}" placeholder="守備" class="w-16 px-2 py-1 rounded-lg border border-slate-200 text-center text-[11px]">
-          </div>
-        </div>
-      `;
-    }).join('');
-  };
-
-  window.toggleAllBatchEnrollChecks_ = function (checked) {
-    document.querySelectorAll('input[name="batchEnrollUserCb"]').forEach(cb => {
-      cb.checked = Boolean(checked);
-    });
-  };
-
-  window.openBatchEnrollPlayersModal = function () {
-    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
-    if (!tid) {
-      alert('請先選擇目標球隊');
-      return;
-    }
-    ensureBatchEnrollPlayersModal_();
-    const searchEl = document.getElementById('batchEnrollSearchInput');
-    if (searchEl) searchEl.value = '';
-    window.renderBatchEnrollCandidateList_();
-    const modal = document.getElementById('batchEnrollPlayersModal');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  };
-
-  window.closeBatchEnrollPlayersModal = function () {
-    const modal = document.getElementById('batchEnrollPlayersModal');
-    if (!modal) return;
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-  };
-
-  window.submitBatchEnrollPlayers = async function () {
-    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
-    if (!tid) return;
-
-    const token = getActiveAuthToken_();
-    if (!token) {
-      alert('⚠️ 尚未取得登入憑證，請先重新登入後再執行批次入隊');
-      return;
-    }
-
-    const checked = Array.from(document.querySelectorAll('input[name="batchEnrollUserCb"]:checked'));
-    if (checked.length === 0) {
-      alert('請至少勾選一位要入隊的球員');
-      return;
-    }
-
-    const btn = document.getElementById('btnSubmitBatchEnroll');
-    if (btn) btn.disabled = true;
-
-    const playersPayload = checked.map(cb => {
-      const uid = String(cb.value || '').trim();
-      const u = (window.globalData?.users || []).find(item => String(item.user_id).trim() === uid) || {};
-      const numVal = document.querySelector(`input[data-enroll-num="${uid}"]`)?.value.trim() || '';
-      const posVal = document.querySelector(`input[data-enroll-pos="${uid}"]`)?.value.trim() || u.position || '';
-      return {
-        user_id: uid,
-        player_name: u.player_name || u.account || uid,
-        number: numVal,
-        role_type: u.role_type || 'player',
-        position: posVal,
-        bat_throw: u.bat_throw || '',
-        phone: u.phone || ''
-      };
-    });
-
-    try {
-      if (typeof callApi === 'function') {
-        const batchRes = await callApi('batchEnrollTeamRoster', {
-          token,
-          team_id: tid,
-          players: playersPayload
-        });
-        if (batchRes && batchRes.result === 'ok') {
-          alert(`✅ 已批次將 ${batchRes.enrolled_count || playersPayload.length} 位球員登錄至本隊！`);
-          window.closeBatchEnrollPlayersModal();
-          if (typeof initSystem === 'function') await initSystem();
-          return;
-        }
-      }
-
-      let okCount = 0;
-      for (const p of playersPayload) {
-        const res = await BBTApi.saveRoster({
-          token,
-          team_id: tid,
-          ...p,
-          status: 'approved'
-        });
-        if (res && res.result === 'ok') okCount++;
-      }
-
-      alert(`✅ 已批次將 ${okCount} 位球員登錄至本隊！`);
-      window.closeBatchEnrollPlayersModal();
-      if (typeof initSystem === 'function') await initSystem();
-    } finally {
-      if (btn) btn.disabled = false;
-    }
-  };
-
-  // --- 5. 按鈕注入與掛鉤 ---
-  function injectBatchTriggerButtons_() {
-    renameTeamIntroButton_();
-
-    const singleEnrollBtn = Array.from(document.querySelectorAll('button')).find(
-      b => String(b.getAttribute('onclick') || '').includes('openEnrollExistingModal')
-    );
-    if (singleEnrollBtn && !document.getElementById('btnOpenBatchEnrollPlayers')) {
-      const batchBtn = document.createElement('button');
-      batchBtn.type = 'button';
-      batchBtn.id = 'btnOpenBatchEnrollPlayers';
-      batchBtn.onclick = window.openBatchEnrollPlayersModal;
-      batchBtn.className = 'bg-slate-800 hover:bg-slate-900 text-white text-xs font-black px-3 py-2 rounded-xl shadow-sm transition flex items-center gap-1 whitespace-nowrap shrink-0';
-      batchBtn.innerHTML = `<i data-lucide="user-plus" class="w-3.5 h-3.5 text-emerald-400"></i><span>大批入隊</span>`;
-      singleEnrollBtn.parentElement?.insertBefore(batchBtn, singleEnrollBtn.nextSibling);
-    }
-
-    const createAccBtn = Array.from(document.querySelectorAll('button')).find(
-      b => String(b.getAttribute('onclick') || '').includes('openCreateAccountModal')
-    );
-    if (createAccBtn && !document.getElementById('btnOpenBatchImportAccounts')) {
-      const batchAccBtn = document.createElement('button');
-      batchAccBtn.type = 'button';
-      batchAccBtn.id = 'btnOpenBatchImportAccounts';
-      batchAccBtn.onclick = window.openBatchImportAccountsModal;
-      batchAccBtn.className = 'px-2.5 py-1 text-[11px] font-bold rounded-lg gap-1 whitespace-nowrap shrink-0 bg-emerald-700/80 hover:bg-emerald-700 text-white border border-emerald-500/40 transition flex items-center';
-      batchAccBtn.innerHTML = `<i data-lucide="upload" class="w-3.5 h-3.5"></i><span>批次建帳</span>`;
-      createAccBtn.parentElement?.insertBefore(batchAccBtn, createAccBtn.nextSibling);
-    }
-
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  }
-
-  const origRenderOverview = window.renderOverviewKpiBoard;
-  if (typeof origRenderOverview === 'function' && !origRenderOverview.__batchInjected) {
-    window.renderOverviewKpiBoard = function (...args) {
-      const res = origRenderOverview.apply(this, args);
-      injectBatchTriggerButtons_();
-      return res;
-    };
-    window.renderOverviewKpiBoard.__batchInjected = true;
-  }
-
-  const origSelectTeam = window.selectTeam;
-  if (typeof origSelectTeam === 'function' && !origSelectTeam.__batchInjected) {
-    window.selectTeam = function (...args) {
-      const res = origSelectTeam.apply(this, args);
-      injectBatchTriggerButtons_();
-      return res;
-    };
-    window.selectTeam.__batchInjected = true;
-  }
-
-  if (document.readyState !== 'loading') {
-    injectBatchTriggerButtons_();
-  } else {
-    document.addEventListener('DOMContentLoaded', injectBatchTriggerButtons_, { once: true });
-  }
-})();
-
-(function fixTeamLogoUploadAndRender_() {
-  function getActiveAuthToken_() {
-    const keys = ['bbt_auth_token', 'token'];
-    for (const k of keys) {
-      const s = sessionStorage.getItem(k);
-      if (s && s.trim()) return s.trim();
-      const l = localStorage.getItem(k);
-      if (l && l.trim()) return l.trim();
-    }
-    return (
-      window.authToken ||
-      window.currentToken ||
-      (window.currentUser && window.currentUser.token) ||
-      ''
-    ).toString().trim();
-  }
-
-  let pendingLogoUploadData_ = null;
-
-  window.handleTeamLogoFileChange_ = function (evt) {
-    const file = evt?.target?.files?.[0];
-    const teamId = String(window.currentSelectedTeamId || currentSelectedTeamId || 'team').trim();
-    if (!file) {
-      pendingLogoUploadData_ = null;
-      return;
-    }
-
-    const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
-    const fileName = `${teamId}.${ext}`;
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      const dataUrl = String(e.target?.result || '');
-      const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
-      pendingLogoUploadData_ = {
-        fileName,
-        mimeType: file.type || 'image/png',
-        base64,
-        dataUrl
-      };
-
-      const previewEl = document.getElementById('editTeamLogoPreview');
-      if (previewEl && dataUrl) {
-        previewEl.src = dataUrl;
-        previewEl.classList.remove('hidden');
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  window.saveCurrentTeamProfile = async function () {
-    const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
-    if (!tid) return;
-
-    const token = getActiveAuthToken_();
-    if (!token) {
-      alert('⚠️ 尚未取得登入憑證，請先重新登入後再儲存');
-      return;
-    }
-
-    const fileInput = document.getElementById('editTeamLogoFile');
-    if (fileInput && fileInput.files && fileInput.files[0] && !pendingLogoUploadData_) {
-      alert('⏳ 圖片仍在讀取中，請稍等 1 秒再按儲存');
-      return;
-    }
-
-    const intro = document.getElementById('editTeamIntro')?.value ?? '';
-    const contact = document.getElementById('editTeamContact')?.value ?? '';
-    const phone = document.getElementById('editTeamPhone')?.value ?? '';
-
-    const existingTeam = (window.globalData?.teams || []).find(t => String(t.team_id) === tid) || {};
-    let finalLogoUrl = String(existingTeam.logo_url || '').trim();
-    if (finalLogoUrl && !/^https?:\/\//i.test(finalLogoUrl) && !finalLogoUrl.startsWith('data:')) {
-      finalLogoUrl = '';
-    }
-
-    if (pendingLogoUploadData_ && pendingLogoUploadData_.base64) {
-      if (typeof callApi !== 'function') {
-        alert('❌ 找不到 callApi 函式，無法上傳至 Google Drive');
-        return;
-      }
-
-      const uploadRes = await callApi('uploadTeamLogo', {
-        token,
-        team_id: tid,
-        file_name: pendingLogoUploadData_.fileName,
-        mime_type: pendingLogoUploadData_.mimeType,
-        base64: pendingLogoUploadData_.base64
-      });
-
-      console.log('[uploadTeamLogo response]', uploadRes);
-
-      if (!uploadRes || uploadRes.result !== 'ok' || !uploadRes.logo_url) {
-        alert('❌ 隊徽上傳到 Google Drive 失敗：' + (uploadRes?.message || '未回傳有效 logo_url'));
-        return;
-      }
-      finalLogoUrl = String(uploadRes.logo_url).trim();
-    }
-
-    const res = await BBTApi.saveTeamProfile({
-      token,
-      team_id: tid,
-      intro,
-      contact_name: contact,
-      contact_phone: phone,
-      logo_url: finalLogoUrl,
-      logo_path: finalLogoUrl
-    });
-
-    if (res && res.result === 'ok') {
-      pendingLogoUploadData_ = null;
-      if (fileInput) fileInput.value = '';
-      if (existingTeam) {
-        existingTeam.intro = intro;
-        existingTeam.contact_name = contact;
-        existingTeam.contact_phone = phone;
-        existingTeam.logo_url = finalLogoUrl;
-      }
-      alert('✅ 球隊簡介與隊徽已儲存！');
-      if (typeof window.closeTeamProfileModal === 'function') window.closeTeamProfileModal();
-      if (typeof initSystem === 'function') await initSystem();
-    } else {
-      alert('❌ 儲存失敗: ' + (res?.message || ''));
-    }
-  };
-
-  window.buildTeamLogoHtml = function (team, sizeClass = 'w-10 h-10 text-sm') {
-    const t = team || {};
-    const rawUrl = String(t.logo_url || '').trim();
-    const fallbackText = String(t.team_name || t.team_id || '?').trim().slice(0, 1) || '?';
-    const isValidImgUrl = /^https?:\/\//i.test(rawUrl) || rawUrl.startsWith('data:image/') || rawUrl.startsWith('img/');
-
-    if (isValidImgUrl) {
-      return `
-        <span class="relative inline-flex items-center justify-center ${sizeClass} rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
-          <img
-            src="${rawUrl}"
-            alt="${String(t.team_name || '隊徽')}"
-            class="w-full h-full object-cover"
-            onerror="this.style.display='none'; if (this.nextElementSibling) this.nextElementSibling.style.display='flex';"
-          />
-          <span class="hidden w-full h-full items-center justify-center bg-emerald-600 text-white font-black">${fallbackText}</span>
-        </span>
-      `;
-    }
-
-    return `<span class="inline-flex items-center justify-center ${sizeClass} rounded-xl bg-emerald-600 text-white font-black shrink-0">${fallbackText}</span>`;
-  };
-})();
-
-(function syncRightTeamDetailLogo_() {
-  const originalSelectTeam = window.selectTeam || window.renderTeamDetail || window.renderSelectedTeam;
-
-  function refreshRightPanelLogo_(teamObj) {
-    const t = teamObj || (window.globalData?.teams || []).find(
-      item => String(item.team_id) === String(window.currentSelectedTeamId || '')
-    );
-    if (!t || typeof window.buildTeamLogoHtml !== 'function') return;
-
-    // 尋找右側「暗殺者」標題旁原本放隊徽的容器（優先找含單字或圖片的徽章區塊）
-    const detailContainer =
-      document.getElementById('teamDetailLogo') ||
-      document.querySelector('[data-team-detail-logo]') ||
-      document.querySelector('.team-detail-header .w-16, .team-detail-header .w-14, .team-detail-header .w-12');
-
-    if (detailContainer) {
-      detailContainer.outerHTML = window.buildTeamLogoHtml(t, 'w-16 h-16 text-xl');
-    }
-  }
-
-  // 監聽 initSystem / 切換球隊後，同步刷新右側隊徽
-  const prevInitSystem = window.initSystem;
-  if (typeof prevInitSystem === 'function') {
-    window.initSystem = async function (...args) {
-      const res = await prevInitSystem.apply(this, args);
-      refreshRightPanelLogo_();
-      return res;
-    };
-  }
-
-  if (typeof originalSelectTeam === 'function') {
-    const fnName = window.selectTeam ? 'selectTeam' : (window.renderTeamDetail ? 'renderTeamDetail' : 'renderSelectedTeam');
-    window[fnName] = function (...args) {
-      const res = originalSelectTeam.apply(this, args);
-      refreshRightPanelLogo_();
-      return res;
-    };
   }
 })();
