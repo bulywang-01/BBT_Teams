@@ -6,12 +6,12 @@
   <title>BBT 軟式棒球聯盟 — 球隊與球員管理系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  
+
   <!-- 若專案仍有獨立的 api.js / auth.js，可視需要放在 index.js 之前 -->
   <script src="js/api.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/index.js"></script>
-  
+
   <script>
     tailwind.config = {
       theme: {
@@ -123,15 +123,15 @@
           <img src="bbtlogo.png" alt="BBT" class="w-8 h-8 rounded-lg object-contain bg-white/10 p-1 shrink-0" onerror="this.style.display='none'">
           <div class="flex items-center gap-2 min-w-0">
             <h1 class="font-black text-base sm:text-lg tracking-wide text-white truncate">BBT 軟式棒球聯盟球隊管理系統</h1>
-            <span id="roleBadge" class="bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">GUEST</span>
+            <span id="roleBadge" class="bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0">LOADING</span>
           </div>
         </div>
 
         <div class="flex items-center gap-3 text-xs whitespace-nowrap ml-auto">
           <div class="flex items-center gap-1.5 text-slate-300">
             <span class="text-slate-400">歡迎，</span>
-            <span id="userNameDisplay" class="font-black text-white">未登入</span>
-            <span id="userTitleDisplay" class="hidden md:inline text-[11px] text-slate-400">· 請先登入系統</span>
+            <span id="userNameDisplay" class="font-black text-white">載入中</span>
+            <span id="userTitleDisplay" class="hidden md:inline text-[11px] text-slate-400">· 正在驗證狀態</span>
           </div>
 
           <button id="btnOpenSelfProfile" onclick="openSelfProfileModal()" class="hidden text-sky-400 hover:text-sky-300 hover:underline font-bold transition items-center gap-1">
@@ -139,7 +139,7 @@
             <span>個人資料</span>
           </button>
 
-          <button id="btnAuthAction" onclick="handleAuthButtonClick()" class="text-rose-400 hover:text-rose-300 hover:underline font-bold transition flex items-center gap-1">
+          <button id="btnAuthAction" onclick="handleAuthButtonClick()" class="hidden text-rose-400 hover:text-rose-300 hover:underline font-bold transition items-center gap-1">
             <i id="btnAuthIcon" data-lucide="log-in" class="w-3.5 h-3.5"></i>
             <span id="btnAuthText">登入</span>
           </button>
@@ -147,7 +147,7 @@
       </div>
 
       <!-- 下排：管理功能列（依權限顯示） -->
-      <div id="headerAdminRow" class="flex flex-wrap items-center justify-center gap-2.5 pt-2.5 border-t border-slate-800/90">
+      <div id="headerAdminRow" class="hidden flex-wrap items-center justify-center gap-2.5 pt-2.5 border-t border-slate-800/90">
         <button id="btnOpenCreateAccount" onclick="openCreateAccountModal()" class="hidden bbt-header-pill text-sky-300 border-sky-500/40 hover:border-sky-400/60 items-center gap-1.5">
           <i data-lucide="user-plus" class="w-3.5 h-3.5 text-sky-400"></i>
           <span>建立帳號</span>
@@ -172,8 +172,33 @@
     </div>
   </header>
 
-  <!-- ================= 主工作區 ================= -->
-  <main class="max-w-7xl mx-auto px-4 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+  <!-- ================= 狀態閘門 1：載入中（預設顯示，避免誤會為無資料） ================= -->
+  <section id="loadingGateScreen" class="max-w-xl mx-auto px-4 py-16">
+    <div class="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm flex flex-col items-center justify-center text-center space-y-3">
+      <div class="w-9 h-9 rounded-full border-4 border-slate-200 border-t-emerald-600 animate-spin"></div>
+      <h2 id="loadingGateTitle" class="font-black text-base text-slate-900">正在驗證登入狀態與載入系統資料...</h2>
+      <p id="loadingGateSub" class="text-xs text-slate-500">完成前不會顯示主畫面與統計數據，請稍候。</p>
+    </div>
+  </section>
+
+  <!-- ================= 狀態閘門 2：未登入直接跳轉／呈現登入引導 ================= -->
+  <section id="authGateScreen" class="hidden max-w-md mx-auto px-4 py-16">
+    <div class="bg-white rounded-2xl border border-slate-200 p-7 shadow-sm text-center space-y-4">
+      <div class="w-12 h-12 rounded-2xl bg-slate-900 text-emerald-400 flex items-center justify-center mx-auto">
+        <i data-lucide="lock" class="w-6 h-6"></i>
+      </div>
+      <div class="space-y-1">
+        <h2 class="font-black text-lg text-slate-900">尚未登入 BBT 管理系統</h2>
+        <p class="text-xs text-slate-500">請先登入帳號以查看聯盟球隊、球員編制與出賽管理資料。</p>
+      </div>
+      <button type="button" onclick="BBTGateView.triggerLogin()" class="w-full py-2.5 px-4 rounded-xl text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 transition shadow">
+        前往登入系統
+      </button>
+    </div>
+  </section>
+
+  <!-- ================= 主工作區（預設隱藏，僅在已登入且載入完成時顯示） ================= -->
+  <main id="mainWorkspace" class="hidden max-w-7xl mx-auto px-4 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
 
     <!-- 左側球隊清單 -->
     <aside id="leftTeamSidebar" class="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-4 space-y-3 h-fit shadow-sm">
@@ -218,7 +243,7 @@
               </div>
 
               <select id="seasonSelect" onchange="onSeasonChange(this.value)" class="bbt-light-select">
-                <option value="">目前無資料，請新增球季</option>
+                <option value="">載入球季中...</option>
               </select>
             </div>
           </div>
@@ -231,28 +256,28 @@
         <div class="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-2.5">
           <div class="bg-slate-50/90 border border-slate-200/80 rounded-xl p-2 sm:p-3 min-w-0">
             <div class="text-[10px] sm:text-[11px] font-bold text-slate-500 truncate">組別球隊數</div>
-            <div id="kpiTeamCount" class="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 leading-tight">0</div>
-            <div id="kpiTotalTeamSub" class="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate">全聯盟共 0 隊</div>
+            <div id="kpiTeamCount" class="text-lg sm:text-2xl font-black text-slate-900 mt-0.5 leading-tight">—</div>
+            <div id="kpiTotalTeamSub" class="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate">資料同步中</div>
           </div>
           <div class="bg-slate-50/90 border border-slate-200/80 rounded-xl p-2 sm:p-3 min-w-0">
             <div class="text-[10px] sm:text-[11px] font-bold text-slate-500 truncate">登錄球員數</div>
-            <div id="kpiRosterCount" class="text-lg sm:text-2xl font-black text-emerald-600 mt-0.5 leading-tight">0</div>
-            <div id="kpiAccountCountSub" class="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate">已建帳號 0 筆</div>
+            <div id="kpiRosterCount" class="text-lg sm:text-2xl font-black text-emerald-600 mt-0.5 leading-tight">—</div>
+            <div id="kpiAccountCountSub" class="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate">資料同步中</div>
           </div>
           <div class="bg-slate-50/90 border border-slate-200/80 rounded-xl p-2 sm:p-3 min-w-0">
             <div class="text-[10px] sm:text-[11px] font-bold text-slate-500 truncate">出勤回報筆數</div>
-            <div id="kpiAttendanceCount" class="text-lg sm:text-2xl font-black text-bbt-navy mt-0.5 leading-tight">0</div>
+            <div id="kpiAttendanceCount" class="text-lg sm:text-2xl font-black text-bbt-navy mt-0.5 leading-tight">—</div>
             <div class="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate">本季累計紀錄</div>
           </div>
           <div class="bg-slate-50/90 border border-slate-200/80 rounded-xl p-2 sm:p-3 min-w-0">
             <div class="text-[10px] sm:text-[11px] font-bold text-slate-500 truncate">異動與歷程</div>
-            <div id="kpiTxHistoryCount" class="text-lg sm:text-2xl font-black text-amber-600 mt-0.5 leading-tight">0</div>
-            <div id="kpiPendingTxSub" class="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate">待審核 0 筆</div>
+            <div id="kpiTxHistoryCount" class="text-lg sm:text-2xl font-black text-amber-600 mt-0.5 leading-tight">—</div>
+            <div id="kpiPendingTxSub" class="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate">資料同步中</div>
           </div>
           <div id="kpiAnnualFaCard" class="bg-slate-50/90 border border-slate-200/80 rounded-xl p-2 sm:p-3 min-w-0">
             <div class="text-[10px] sm:text-[11px] font-bold text-slate-500 truncate">年度 FA</div>
-            <div id="kpiAnnualFaCount" class="text-lg sm:text-2xl font-black text-purple-700 mt-0.5 leading-tight">0</div>
-            <div class="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate">核准 0 · 未開放</div>
+            <div id="kpiAnnualFaCount" class="text-lg sm:text-2xl font-black text-purple-700 mt-0.5 leading-tight">—</div>
+            <div class="text-[9px] sm:text-[11px] text-slate-400 mt-0.5 truncate">資料同步中</div>
           </div>
         </div>
 
@@ -1268,5 +1293,142 @@
       </div>
     </div>
   </div>
+
+  <!-- ================= 載入與登入狀態閘門控制器 ================= -->
+  <script>
+    (function () {
+      const state = {
+        isLoading: true,
+        isAuthenticated: false,
+        loadingText: '正在驗證登入狀態與載入系統資料...',
+        loadingSub: '完成前不會顯示主畫面與統計數據，請稍候。'
+      };
+
+      function toggleEl(el, show, displayClasses) {
+        if (!el) return;
+        if (show) {
+          el.classList.remove('hidden');
+          if (Array.isArray(displayClasses) && displayClasses.length) {
+            el.classList.add(...displayClasses);
+          }
+        } else {
+          el.classList.add('hidden');
+          if (Array.isArray(displayClasses) && displayClasses.length) {
+            el.classList.remove(...displayClasses);
+          }
+        }
+      }
+
+      function applyGateView() {
+        const loadingScreen = document.getElementById('loadingGateScreen');
+        const authGateScreen = document.getElementById('authGateScreen');
+        const mainWorkspace = document.getElementById('mainWorkspace');
+        const headerAdminRow = document.getElementById('headerAdminRow');
+        const btnAuthAction = document.getElementById('btnAuthAction');
+        const roleBadge = document.getElementById('roleBadge');
+        const userNameDisplay = document.getElementById('userNameDisplay');
+        const userTitleDisplay = document.getElementById('userTitleDisplay');
+        const loadingGateTitle = document.getElementById('loadingGateTitle');
+        const loadingGateSub = document.getElementById('loadingGateSub');
+
+        if (loadingGateTitle) loadingGateTitle.textContent = state.loadingText;
+        if (loadingGateSub) loadingGateSub.textContent = state.loadingSub;
+
+        if (state.isLoading) {
+          toggleEl(loadingScreen, true);
+          toggleEl(authGateScreen, false);
+          toggleEl(mainWorkspace, false);
+          toggleEl(headerAdminRow, false, ['flex']);
+          toggleEl(btnAuthAction, false, ['flex']);
+
+          if (roleBadge) roleBadge.textContent = 'LOADING';
+          if (userNameDisplay) userNameDisplay.textContent = '載入中';
+          if (userTitleDisplay) userTitleDisplay.textContent = '· 正在驗證狀態';
+          return;
+        }
+
+        toggleEl(loadingScreen, false);
+
+        if (!state.isAuthenticated) {
+          toggleEl(authGateScreen, true);
+          toggleEl(mainWorkspace, false);
+          toggleEl(headerAdminRow, false, ['flex']);
+          toggleEl(btnAuthAction, true, ['flex']);
+
+          if (roleBadge) roleBadge.textContent = 'GUEST';
+          if (userNameDisplay) userNameDisplay.textContent = '未登入';
+          if (userTitleDisplay) userTitleDisplay.textContent = '· 請先登入系統';
+          return;
+        }
+
+        // 已登入且非載入中：顯示主工作區
+        toggleEl(authGateScreen, false);
+        toggleEl(mainWorkspace, true);
+        toggleEl(headerAdminRow, true, ['flex']);
+        toggleEl(btnAuthAction, true, ['flex']);
+      }
+
+      function openLoginModalDirectly() {
+        if (window.BBTAuth && typeof window.BBTAuth.openLoginModal === 'function') {
+          window.BBTAuth.openLoginModal();
+          return;
+        }
+        const modal = document.getElementById('loginModal');
+        if (modal) {
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+        }
+      }
+
+      window.BBTGateView = {
+        sync(opts = {}) {
+          if (typeof opts.isLoading === 'boolean') state.isLoading = opts.isLoading;
+          if (typeof opts.isAuthenticated === 'boolean') state.isAuthenticated = opts.isAuthenticated;
+          if (typeof opts.loadingText === 'string' && opts.loadingText.trim()) {
+            state.loadingText = opts.loadingText.trim();
+          }
+          if (typeof opts.loadingSub === 'string' && opts.loadingSub.trim()) {
+            state.loadingSub = opts.loadingSub.trim();
+          }
+          applyGateView();
+          if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons();
+          }
+        },
+        setLoading(isLoading, loadingText, loadingSub) {
+          this.sync({ isLoading, loadingText, loadingSub });
+        },
+        setAuthenticated(isAuthenticated) {
+          this.sync({ isAuthenticated, isLoading: false });
+          if (!isAuthenticated) {
+            openLoginModalDirectly();
+          }
+        },
+        triggerLogin() {
+          openLoginModalDirectly();
+        },
+        getState() {
+          return { ...state };
+        }
+      };
+
+      // 初始先套用載入中狀態
+      applyGateView();
+
+      // 若外部 auth.js / index.js 未主動呼叫 BBTGateView，DOM 載入後依現有狀態做安全 fallback
+      document.addEventListener('DOMContentLoaded', () => {
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+        const currentUser =
+          (window.BBTAuth && (window.BBTAuth.currentUser || (typeof window.BBTAuth.getUser === 'function' && window.BBTAuth.getUser()))) ||
+          window.currentUser ||
+          null;
+        if (currentUser && currentUser.loggedIn !== false) {
+          window.BBTGateView.sync({ isLoading: false, isAuthenticated: true });
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
