@@ -1,3 +1,44 @@
+// ============================================================================
+// BBT 軟式棒球聯盟 - 全域狀態變數初始化（需放在 initSystem 之前）
+// ============================================================================
+var DIVISION_ORDER = window.DIVISION_ORDER || ['大聯盟', '小聯盟', '育成組'];
+var REMOTE_SCHEDULE_SHEET_ID = window.REMOTE_SCHEDULE_SHEET_ID || '';
+
+var currentSeason = window.currentSeason || '';
+var currentDivision = window.currentDivision || 'ALL';
+var currentSelectedTeamId = window.currentSelectedTeamId || '';
+var currentRosterFilter = window.currentRosterFilter || 'all';
+var currentUser = window.currentUser || null;
+
+var activeCardUserId = window.activeCardUserId || '';
+var activePlayerCardCache = window.activePlayerCardCache || null;
+var pendingReviewTxCache = window.pendingReviewTxCache || null;
+var globalGameCache = window.globalGameCache || {};
+
+var globalData = window.globalData || {
+  teams: [],
+  roster: [],
+  stats: [],
+  announcements: [],
+  league_announcements: [],
+  transactions: [],
+  attendance: [],
+  users: [],
+  history: [],
+  seasons: [],
+  team_season_history: []
+};
+
+window.DIVISION_ORDER = DIVISION_ORDER;
+window.REMOTE_SCHEDULE_SHEET_ID = REMOTE_SCHEDULE_SHEET_ID;
+window.currentSeason = currentSeason;
+window.currentDivision = currentDivision;
+window.currentSelectedTeamId = currentSelectedTeamId;
+window.currentRosterFilter = currentRosterFilter;
+window.currentUser = currentUser;
+window.globalGameCache = globalGameCache;
+window.globalData = globalData;
+
 async function initSystem() {
   if (typeof BBTGateView !== 'undefined' && typeof BBTGateView.setLoading === 'function') {
     BBTGateView.setLoading(true, '正在同步聯盟與球隊資料...', '驗證登入狀態與載入資料中');
