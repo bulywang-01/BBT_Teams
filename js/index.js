@@ -4009,3 +4009,85 @@ function renderTeamSeasonHistoryTab() {
     runBoot();
   }
 })();
+
+// ============================================================================
+// 工具列與總覽版面緊湊化（縮小管理按鈕框框與上方控制列高度）
+// ============================================================================
+function compactToolbarAndOverviewLayout_() {
+  // 1. 縮小頂部深色工具列與按鈕框框
+  const headerEl = document.querySelector('header');
+  if (headerEl) {
+    headerEl.classList.remove('py-4', 'py-5', 'p-4', 'p-5');
+    headerEl.classList.add('py-2.5', 'px-3');
+  }
+
+  const adminRow = document.getElementById('headerAdminRow');
+  if (adminRow) {
+    adminRow.classList.remove('gap-2.5', 'gap-3', 'mt-3', 'pt-3');
+    adminRow.classList.add('flex-wrap', 'gap-1.5', 'mt-2', 'pt-2');
+
+    adminRow.querySelectorAll('button, a').forEach(btn => {
+      btn.classList.remove(
+        'px-4', 'px-5', 'py-2', 'py-2.5', 'py-3',
+        'text-xs', 'text-sm', 'rounded-xl', 'rounded-2xl', 'gap-2'
+      );
+      btn.classList.add(
+        'px-2.5', 'py-1', 'text-[11px]', 'font-bold',
+        'rounded-lg', 'gap-1', 'whitespace-nowrap', 'shrink-0'
+      );
+      const svg = btn.querySelector('svg, i');
+      if (svg) {
+        svg.classList.remove('w-4', 'h-4', 'w-5', 'h-5');
+        svg.classList.add('w-3.5', 'h-3.5');
+      }
+    });
+  }
+
+  // 2. 縮小組別膠囊與球季下拉選單的框框高度
+  const divGroup = document.getElementById('divisionSwitchGroup');
+  if (divGroup) {
+    divGroup.classList.remove('p-1.5', 'gap-1.5');
+    divGroup.classList.add('p-1', 'gap-1');
+    divGroup.querySelectorAll('button').forEach(b => {
+      b.classList.remove('px-4', 'px-3.5', 'py-2', 'py-1.5', 'text-sm');
+      b.classList.add('px-2.5', 'py-1', 'text-xs');
+    });
+  }
+
+  const seasonSelect = document.getElementById('seasonSelect');
+  if (seasonSelect) {
+    seasonSelect.classList.remove('py-2', 'py-2.5', 'px-3.5', 'text-sm');
+    seasonSelect.classList.add('py-1', 'px-2.5', 'text-xs', 'rounded-lg');
+  }
+
+  const btnKpiCreate = document.getElementById('btnKpiCreateTeam');
+  if (btnKpiCreate) {
+    btnKpiCreate.classList.remove('px-4', 'px-3.5', 'py-2', 'py-2.5', 'text-sm');
+    btnKpiCreate.classList.add('px-3', 'py-1.5', 'text-xs', 'rounded-lg');
+  }
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// 掛鉤到既有版面更新流程，確保每次重繪都維持緊湊樣式
+(function hookCompactLayout_() {
+  if (typeof syncPersonalHeaderAndLayout_ === 'function' && !syncPersonalHeaderAndLayout_.__compacted) {
+    const origSync = syncPersonalHeaderAndLayout_;
+    syncPersonalHeaderAndLayout_ = function (...args) {
+      const res = origSync.apply(this, args);
+      compactToolbarAndOverviewLayout_();
+      return res;
+    };
+    syncPersonalHeaderAndLayout_.__compacted = true;
+  }
+
+  if (typeof renderOverviewKpiBoard === 'function' && !renderOverviewKpiBoard.__compacted) {
+    const origKpi = renderOverviewKpiBoard;
+    renderOverviewKpiBoard = function (...args) {
+      const res = origKpi.apply(this, args);
+      compactToolbarAndOverviewLayout_();
+      return res;
+    };
+    renderOverviewKpiBoard.__compacted = true;
+  }
+})();
