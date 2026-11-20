@@ -4322,28 +4322,106 @@ function compactToolbarAndOverviewLayout_() {
     if (hintEl) hintEl.innerText = clean || 'img/';
   };
 
-  window.handleTeamLogoFileChange_ = function (evt) {
-    const file = evt?.target?.files?.[0];
-    const teamId = String(window.currentSelectedTeamId || currentSelectedTeamId || 'team').trim();
-    if (!file) return;
+let pendingLogoUploadData_ = null;
 
-    const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
-    const targetPath = `img/${teamId}.${ext}`;
-    const pathInput = document.getElementById('editTeamLogoPath');
-    if (pathInput) pathInput.value = targetPath;
-    window.syncLogoPathHint_(targetPath);
+window.handleTeamLogoFileChange_ = function (evt) {
+  const file = evt?.target?.files?.[0];
+  const teamId = String(window.currentSelectedTeamId || currentSelectedTeamId || 'team').trim();
+  if (!file) {
+    pendingLogoUploadData_ = null;
+    return;
+  }
 
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      const dataUrl = String(e.target?.result || '');
-      const previewEl = document.getElementById('editTeamLogoPreview');
-      if (previewEl && dataUrl) {
-        previewEl.src = dataUrl;
-        previewEl.classList.remove('hidden');
-      }
+  if (file.size > 2 * 1024 * 1024) {
+    alert('⚠️ 隊徽檔案超過 2MB，建議壓縮後再上傳以加快載入速度');
+  }
+
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+  const fileName = `${teamId}.${ext}`;
+  const pathInput = document.getElementById('editTeamLogoPath');
+  if (pathInput) pathInput.value = `Drive/${fileName}`;
+  if (typeof window.syncLogoPathHint_ === 'function') {
+    window.syncLogoPathHint_(`Drive/${fileName}`);
+  }
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const dataUrl = String(e.target?.result || '');
+    const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : '';
+    pendingLogoUploadData_ = {
+      fileName,
+      mimeType: file.type || 'image/png',
+      base64,
+      dataUrl
     };
-    reader.readAsDataURL(file);
+
+    const previewEl = document.getElementById('editTeamLogoPreview');
+    if (previewEl && dataUrl) {
+      previewEl.src = dataUrl;
+      previewEl.classList.remove('hidden');
+    }
   };
+  reader.readAsDataURL(file);
+};
+
+window.saveCurrentTeamProfile = async function () {
+  const tid = String(window.currentSelectedTeamId || currentSelectedTeamId || '').trim();
+  if (!tid) return;
+
+  const token = getActiveAuthToken_();
+  if (!token) {
+    alert('⚠️ 尚未取得登入憑證，請先重新登入後再儲存');
+    return;
+  }
+
+  const intro = document.getElementById('editTeamIntro')?.value ?? '';
+  const contact = document.getElementById('editTeamContact')?.value ?? '';
+  const phone = document.getElementById('editTeamPhone')?.value ?? '';
+  let finalLogoUrl = String(document.getElementById('editTeamLogoPath')?.value || '').trim();
+
+  // 若有選擇新圖片，先上傳到 Google Drive 目錄
+  if (pendingLogoUploadData_ && pendingLogoUploadData_.base64 && typeof callApi === 'function') {
+    const uploadRes = await callApi('uploadTeamLogo', {
+      token,
+      team_id: tid,
+      file_name: pendingLogoUploadData_.fileName,
+      mime_type: pendingLogoUploadData_.mimeType,
+      base64: pendingLogoUploadData_.base64
+    });
+
+    if (!uploadRes || uploadRes.result !== 'ok') {
+      alert('❌ 隊徽上傳失敗: ' + (uploadRes && uploadRes.message ? uploadRes.message : ''));
+      return;
+    }
+    finalLogoUrl = uploadRes.logo_url || finalLogoUrl;
+  }
+
+  const res = await BBTApi.saveTeamProfile({
+    token,
+    team_id: tid,
+    intro,
+    contact_name: contact,
+    contact_phone: phone,
+    logo_url: finalLogoUrl,
+    logo_path: finalLogoUrl
+  });
+
+  if (res && res.result === 'ok') {
+    pendingLogoUploadData_ = null;
+    const teamObj = (window.globalData?.teams || []).find(t => String(t.team_id) === tid);
+    if (teamObj) {
+      teamObj.intro = intro;
+      teamObj.contact_name = contact;
+      teamObj.contact_phone = phone;
+      if (finalLogoUrl) teamObj.logo_url = finalLogoUrl;
+    }
+    alert('✅ 球隊簡介與隊徽已儲存並同步至 Google Drive！');
+    if (typeof window.closeTeamProfileModal === 'function') window.closeTeamProfileModal();
+    if (typeof initSystem === 'function') await initSystem();
+  } else {
+    alert('❌ 儲存失敗: ' + (res && res.message ? res.message : ''));
+  }
+};
 
   const origOpenTeamProfileModal = window.openTeamProfileModal;
   window.openTeamProfileModal = function () {
